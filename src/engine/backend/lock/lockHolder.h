@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////
 // ibLockHolder — identity marker for who owns a set of pessimistic
-// (sys_lock) locks. Mirrors the ibDatabaseConnectionHolder pattern from
+// (lock file) locks. Mirrors the ibDatabaseConnectionHolder pattern from
 // the connection pool (see connection-pool.md).
 //
 // Today's primary holder kind = the active ibSession (one row in
@@ -18,7 +18,7 @@
 // falls back to ibSession::Current() so existing call sites just work.
 //
 // Identity = a GUID. Two holders with the same Identity() are
-// indistinguishable from sys_lock's perspective (same row owner). For
+// indistinguishable from the lock file's perspective (same row owner). For
 // the default session-derived holder, identity = sys_session.session
 // — keeps lock cleanup naturally aligned with session teardown.
 //
@@ -35,9 +35,8 @@ class BACKEND_API ibLockHolder {
 public:
 	virtual ~ibLockHolder() = default;
 
-	// Owner-identity GUID. Stored as sys_lock.sessionGuid (the column
-	// keeps its historical name — semantically it's "owner-guid",
-	// session is one kind of owner). Two acquires with the same
+	// Owner-identity GUID — a row's owner and its slot's (session is
+	// one kind of owner). Two acquires with the same
 	// Identity() are same-owner re-entry; different Identity = cross-
 	// owner conflict check applies.
 	virtual ibGuid Identity() const = 0;

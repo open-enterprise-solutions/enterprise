@@ -38,6 +38,9 @@ struct ibQueryConstructorSource
 	// Declared by the PLATFORM in every application (ibPlatformSourceRegister — the registration journal), not by
 	// the application: the catalogue draws its kind under Platform, the heading `Data.Platform` is in LINQ.
 	bool                  m_platform = false;
+	// A LOCK of it holds something — the provider of the table it stands for answers (CanLock, `<Kind>.<Object>`, as
+	// the LOCK itself asks it); the Lock kind greys the rest.
+	bool                  m_lockable = false;
 	// What it is drawn with — its descriptor's answer (ibQueryableSourceDescriptor::GetPicture), on the engine's side;
 	// the client's draws a table by its kind's row of the server's answer instead. 0 = none.
 	ibPictureID           m_picture = 0;

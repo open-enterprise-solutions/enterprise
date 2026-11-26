@@ -88,6 +88,9 @@
     <ClInclude Include="databaseLayer\connectionScope.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
+    <ClInclude Include="databaseLayer\transactionTicket.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
     <ClInclude Include="databaseLayer\databaseLayer.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
@@ -898,6 +901,9 @@
       <Filter>session</Filter>
     </ClInclude>
     <ClInclude Include="lock\lockTypes.h">
+      <Filter>lock</Filter>
+    </ClInclude>
+    <ClInclude Include="lock\lockFile.h">
       <Filter>lock</Filter>
     </ClInclude>
     <ClInclude Include="lock\lockHandle.h">
@@ -2227,6 +2233,9 @@
     <ClCompile Include="session\workerPoolHeadless.cpp">
       <Filter>session</Filter>
     </ClCompile>
+    <ClCompile Include="lock\lockFile.cpp">
+      <Filter>lock</Filter>
+    </ClCompile>
     <ClCompile Include="lock\lockHandle.cpp">
       <Filter>lock</Filter>
     </ClCompile>
@@ -2613,6 +2622,9 @@
       <Filter>query\lowering</Filter>
     </ClCompile>
     <ClCompile Include="query\lowering\queryPackage.cpp">
+      <Filter>query\lowering</Filter>
+    </ClCompile>
+    <ClCompile Include="query\lowering\queryLock.cpp">
       <Filter>query\lowering</Filter>
     </ClCompile>
     <ClCompile Include="query\queryProfiler.cpp">

@@ -111,10 +111,10 @@ bool ibValueRecordDataObjectChartOfCalculationTypes::CallAsProc(const long lMeth
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectChartOfCalculationTypes::FillMethods))
 	{
 	case Func::enLock:
-		TryAcquireFormLock();
+		TryLock();
 		return true;
 	case Func::enUnlock:
-		ReleaseFormLock();
+		Unlock();
 		return true;
 	}
 

@@ -287,11 +287,6 @@ void ibDialogQueryConstructor::SetSubQueryMode()
 				m_notebook->RemovePage(page - 1);
 	}
 
-	// FOR UPDATE goes with it — it holds a STATEMENT's rows, and a sub-query is not one. Hidden
-	// rather than greyed, because a disabled control says "not now" while this is "not here".
-	if (m_forUpdate != nullptr)
-		m_forUpdate->Hide();
-
 	// …and so does the statement's KIND, which lives on the Advanced page, not on the strip — a note
 	// here used to say it left with the strip, and it stayed. A nested query is none of the four: INTO
 	// made the outer text unreadable ("INTO inside a nested table"), DROP left no select and the edit
@@ -366,7 +361,7 @@ bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& select, const
 	package.m_statements.push_back(statement);
 
 	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly, exclude);
-	dialog.SetSubQueryMode();   // a query inside another one — no package, no INTO, no FOR UPDATE
+	dialog.SetSubQueryMode();   // a query inside another one — no package, no INTO
 	if (dialog.ShowModal() != wxID_OK)
 		return false;   // read-only closes this way too — nothing is written back, by construction
 

@@ -224,6 +224,12 @@ static ibString gs_listErrorString[] =
 	// for loop they know (2026-11-19).
 	_("A for loop counts with To: for (i = 1 To n). There is no for (start; condition; step) - a loop on a "
 	  "condition is while (condition)."),//ibScriptError_ForCountsWithTo
+	// A BLOCK'S `lock` holds its one source before the first row is read (compileCodeLINQ.cpp) - and its place is
+	// before that source's loop, so there is nothing for it to stand before anywhere else.
+	_("Lock holds the query's one source, once, before its first row is read: after a second From, a Join or the "
+	  "groups of an Into it has nothing to stand before. What a join locks is said by a query's LOCK."),//ibScriptError_LinqLockSource
+	_("Lock is keyed by the one Where written right before it: join its conditions with And, and write a Where "
+	  "that only filters after the Lock."),//ibScriptError_LinqLockWhere
 };
 // A code an entry: a code appended without its message read the NEXT code's text, or past the end.
 static_assert(sizeof(gs_listErrorString) / sizeof(gs_listErrorString[0]) == ibScriptError_Count,
@@ -686,7 +692,8 @@ void ibBackendLockException::RowLockTimeoutThrow(const ibString& objectSynonym)
 // ⭐ WHAT, WHO, SINCE WHEN, AND WHAT FREES IT. It said "<guid> is locked by another session." - an identity nobody
 // knows, and no holder a person could find (a session without a user has no name): a lock met while loading a demo base
 // over MCP could not be traced to the window holding it (2026-11-19). The holder is a user, or the program on its
-// computer; what frees a lock is its form closed, or its session ended.
+// computer; what frees a lock is its holder letting it go, or its session ended. (It said "open for editing … closed
+// there" — a form's words, in an engine that knows no form, read over a LOCK's wait and a write's too, 2026-11-26.)
 void ibBackendLockException::LockConflictThrow(const ibString& objectName,
                                                 const ibString& blockingUser,
                                                 const ibDateTime& since)
@@ -694,12 +701,23 @@ void ibBackendLockException::LockConflictThrow(const ibString& objectName,
 	const ibString holder = blockingUser.IsEmpty() ? ibString(_("another session")) : blockingUser;
 	const ibString msg = since.IsEmpty()
 		? ibString::Format(
-			_("%s is open for editing by %s. It is free when it is closed there or that session ends."),
+			_("%s is locked by %s. It is free when that session lets it go or ends."),
 			objectName, holder)
 		: ibString::Format(
-			_("%s is open for editing by %s since %s. It is free when it is closed there or that session ends."),
+			_("%s is locked by %s since %s. It is free when that session lets it go or ends."),
 			objectName, holder, since.ToString());
 	throw ibBackendLockException(Kind::LockConflict, msg, objectName, blockingUser);
+}
+
+// …AND WHY NOT WAITED: the holder waits for this session, so the wait would end only at its timeout, in both.
+void ibBackendLockException::DeadlockThrow(const ibString& objectName, const ibString& blockingUser)
+{
+	const ibString holder = blockingUser.IsEmpty() ? ibString(_("another session")) : blockingUser;
+	const ibString msg = ibString::Format(
+		_("%s is locked by %s, which waits for a lock this session holds: neither could go on, so this one is "
+		  "refused. Run it again."),
+		objectName, holder);
+	throw ibBackendLockException(Kind::Deadlock, msg, objectName, blockingUser);
 }
 
 // ibBackendDatabaseException + ibDatabaseLayerException implementations

@@ -143,7 +143,7 @@ bool ibValueRecordSetObjectCalculationRegister::DeleteData()
 
 bool ibValueRecordSetObjectCalculationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	return false;
+	return ibValueRecordSetObject::SetPropVal(lPropNum, varPropVal);   // the set's own (LockForUpdate) — the base's
 }
 
 bool ibValueRecordSetObjectCalculationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

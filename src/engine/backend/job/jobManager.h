@@ -167,7 +167,7 @@ struct BACKEND_API ibJobDescription {
 	// Two shapes of scheduled job, differing in exactly this:
 	//
 	//   EXCLUSIVE (the default, and what a platform job is). One job, one record,
-	//   one runner. Before starting, the run claims its own record in sys_lock; if
+	//   one runner. Before starting, the run claims its own record in the lock file; if
 	//   anyone already holds it — this process, another client, another node — the
 	//   run is Skipped and journalled as blocked. Some work is simply not correct
 	//   twice at once: two totals folds racing on one table move the same figure
@@ -840,7 +840,7 @@ private:
 	// (two folds racing on one table corrupt the sum), so the manager does not
 	// leave it to the tenant. Two mechanisms, answering two different questions:
 	//
-	//   sys_lock, `Job.<name>`  — "is somebody running it RIGHT NOW?"
+	//   the lock file, `Job.<name>` — "is somebody running it RIGHT NOW?"
 	//   sys_job.lastRun         — "has it already run recently?"
 	//
 	// Neither alone is enough. Without the claim, two processes start the same job

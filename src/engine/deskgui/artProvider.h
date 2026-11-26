@@ -136,6 +136,7 @@ class ibPicture;   // core/graphics/picture.h — a picture as data, the drawing
 #define wxART_UNIONS				wxART_MAKE_ART_ID(wxART_UNIONS)
 #define wxART_INDEX					wxART_MAKE_ART_ID(wxART_INDEX)
 #define wxART_QUERY_BATCH			wxART_MAKE_ART_ID(wxART_QUERY_BATCH)
+#define wxART_DATA_LOCK				wxART_MAKE_ART_ID(wxART_DATA_LOCK)
 
 // The code editor's context menu: the constructors beside the query's (client wxART_FRONTEND), a breakpoint's
 // condition (wxART_DEBUG), select all (wxART_DOC_MODULE).

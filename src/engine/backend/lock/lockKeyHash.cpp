@@ -2,8 +2,7 @@
 
 #include "backend/backend_exception.h"
 #include "core/crypto/sha256.hpp"
-#include "backend/metaCollection/partial/reference/reference.h"
-#include "backend/metaCollection/partial/commonObject.h"   // ibValueMetaObjectRecordDataRef::GetDocPath()
+#include "core/hash.h"   // FieldsHash — the mixer every value hash folds through
 
 #include <algorithm>
 #include <vector>
@@ -13,13 +12,14 @@ namespace {
 
 // Type tags for the canonical byte serialization. Stable across
 // releases — adding a new type appends a new tag, never reorders.
+// (5 was a reference's: a lock key is written by its values' hashes now
+// — KeyText — and nothing else hashes a reference here.)
 enum class FieldTag : std::uint8_t {
 	Null    = 0,
 	String  = 1,
 	Number  = 2,
 	Boolean = 3,
 	Date    = 4,
-	Ref     = 5,   // ibValueReferenceDataObject — guid + meta-id
 };
 
 // Sorted copy of the keyFields (case-insensitive on name to match the
@@ -85,20 +85,6 @@ void EncodeValue(std::vector<std::uint8_t>& buf, const ibValue& v)
 			AppendString(buf, ibString::Format(ibT("%04d-%02u-%02uT%02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
 		}
 		break;
-	case ibValueTypes::TYPE_REFFER: {
-		// The dominant case for record-locking — a ref to a Catalog
-		// item / Document. Two-part identity (metaobject + guid).
-		auto* refData = dynamic_cast<ibValueReferenceDataObject*>(v.GetRef());
-		if (refData == nullptr) {
-			ibBackendCoreException::Error(
-				_("Lock key contains an unsupported reference value"));
-		}
-		buf.push_back(static_cast<std::uint8_t>(FieldTag::Ref));
-		const auto* meta = refData->GetMetaObjectRef();
-		AppendString(buf, meta != nullptr ? meta->GetDocPath() : ibString());
-		AppendString(buf, static_cast<ibString>(refData->GetGuid()));
-		break;
-	}
 	default:
 		ibBackendCoreException::Error(
 			_("Lock key contains an unsupported value type"));
@@ -116,6 +102,39 @@ ibString ToHex(const std::uint8_t digest[ibSHA256::DIGEST_SIZE])
 		out += kHex[ digest[i]       & 0x0F];
 	}
 	return out;
+}
+
+// ⭐⭐ A FIELD'S VALUE AS THE KEY WRITES IT — ITS HASH, the value's own (GetValueHash), because conflicts are read
+// from this text (Overlap) and the hash is what two equal values share: a reference hashes by its guid, a number by
+// its value (1 and 1.0 one key, 1.5 and 1.7 two), a text by its characters. It was GetString(), the value as a person reads it: a reference wrote
+// its presentation, which two items may share, and a date the locale's format.
+//
+// Equal values write one hash; two values that share one meet — a lock wider than asked, never narrower, which is
+// the contract GetValueHash is written to ("coarser is safe"). The low 32 bits: the hash is computed in 64 and handed
+// back as size_t, so a 32-bit and a 64-bit process on one base agree on these.
+ibString KeyText(const ibValue& v)
+{
+	return ibString::Format(ibT("%08x"), static_cast<unsigned int>(static_cast<std::uint32_t>(v.GetValueHash())));
+}
+
+// The fields of a canonical key back: (name, value hash) in the order Canonicalize wrote them.
+std::vector<std::pair<ibString, ibString>> KeyFieldsOf(const ibString& keyData)
+{
+	std::vector<std::pair<ibString, ibString>> fields;
+	std::size_t from = 0;
+	while (from < keyData.length()) {
+		std::size_t to = keyData.find(ibT(';'), from);
+		if (to == ibString::npos)
+			to = keyData.length();
+		const ibString part = keyData.substr(from, to - from);
+		const std::size_t eq = part.find(ibT('='));
+		if (eq == ibString::npos)
+			fields.emplace_back(part, ibString());
+		else
+			fields.emplace_back(part.substr(0, eq), part.substr(eq + 1));
+		from = to + 1;
+	}
+	return fields;
 }
 
 } // namespace
@@ -159,36 +178,75 @@ ibString Canonicalize(const std::vector<std::pair<ibString, ibValue>>& keyFields
 			out += ibT(";");
 		out += kv.first;
 		out += ibT("=");
-		// Re-use GetString() for the human-readable side — slightly
-		// different from EncodeValue's strict bytes (e.g. Date emits
-		// platform-default format) but acceptable for a diagnostic /
-		// conflict-message payload.
-		out += kv.second.GetString();
+		out += KeyText(kv.second);
 	}
 	return out;
+}
+
+bool Overlap(const ibString& keyData, const ibString& otherKeyData)
+{
+	const std::vector<std::pair<ibString, ibString>> mine   = KeyFieldsOf(keyData);
+	const std::vector<std::pair<ibString, ibString>> theirs = KeyFieldsOf(otherKeyData);
+
+	// Both lists are sorted by name as Canonicalize wrote them: walk them together, and compare the fields
+	// both name. A field only one of them names is any value to the other.
+	std::size_t i = 0, j = 0;
+	while (i < mine.size() && j < theirs.size()) {
+		const int byName = mine[i].first.CmpNoCase(theirs[j].first);
+		if (byName < 0)
+			++i;
+		else if (byName > 0)
+			++j;
+		else {
+			if (mine[i].second != theirs[j].second)
+				return false;
+			++i;
+			++j;
+		}
+	}
+	return true;
+}
+
+std::uint64_t FieldsHash(const ibString& keyData)
+{
+	std::uint64_t hash = kIbHashBasis;
+	bool inName = true;   // a name runs to its '=', its value to the next ';'
+	for (const ibChar c : keyData) {
+		if (c == ibT(';')) {
+			hash = ibHashCombine(hash, static_cast<std::uint64_t>(';'));
+			inName = true;
+		}
+		else if (c == ibT('='))
+			inName = false;
+		else if (inName)
+			hash = ibHashCombine(hash, static_cast<std::uint64_t>(c >= ibT('A') && c <= ibT('Z') ? c - ibT('A') + ibT('a') : c));
+	}
+	return hash != 0 ? hash : 1;
 }
 
 } // namespace ibLockKey
 
 //**********************************************************************
-//*           ibLockItem — lazy hash / canonical accessors             *
+//*           ibLockItem — hash / canonical accessors                  *
 //**********************************************************************
 // Delegates to the free functions above so the byte-layout discipline
-// stays in one translation unit; ibLockItem just owns the per-instance
-// cache so call sites and lockManager don't recompute on every Acquire.
+// stays in one translation unit; made from keyFields as they are at the
+// call, never kept (lockTypes.h says why).
 
-const ibString& ibLockItem::KeyHash() const
+// The key's hash is its TEXT's — the values' own hashes, the same ones the conflict reads — so a key of any value
+// hashes, and no table is asked what a reference is. The whole table (no field) is Hash's sentinel.
+ibString ibLockItem::KeyHash() const
 {
-	if (m_keyHashCached.IsEmpty())
-		m_keyHashCached = ibLockKey::Hash(keyFields);
-	return m_keyHashCached;
+	const ibString text = KeyData();
+	if (text.IsEmpty())
+		return ibLockKey::Hash({});
+	const auto utf8 = text.utf8_str();
+	std::uint8_t digest[ibSHA256::DIGEST_SIZE];
+	ibSHA256::Hash(reinterpret_cast<const std::uint8_t*>(utf8.data()), utf8.length(), digest);
+	return ToHex(digest);
 }
 
-const ibString& ibLockItem::KeyData() const
+ibString ibLockItem::KeyData() const
 {
-	if (!m_keyDataValid) {
-		m_keyDataCached = ibLockKey::Canonicalize(keyFields);
-		m_keyDataValid = true;
-	}
-	return m_keyDataCached;
+	return ibLockKey::Canonicalize(keyFields);
 }

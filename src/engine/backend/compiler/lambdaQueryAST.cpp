@@ -284,7 +284,11 @@ ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int 
 		return e;
 	}
 
-	for (long ip = c.to - 1; ip > c.from; --ip) {
+	// A lambda's body opens with its OPER_LFUNC, which writes nothing the body reads; a range opens with the body's own
+	// first instruction — a where's read of the row's field (`g.Code`), which left out came back as the cell it lands
+	// in, and the lock keyed by it as `&@cell = &c` (2026-11-26).
+	const long first = c.fn != nullptr ? c.from + 1 : c.from;
+	for (long ip = c.to - 1; ip >= first; --ip) {
 		const ibByteUnit& code = c.bc.m_listCode[(size_t)ip];
 		if (!ClaimsItsSlot(code.m_numOper % TYPE_DELTA1))
 			continue;

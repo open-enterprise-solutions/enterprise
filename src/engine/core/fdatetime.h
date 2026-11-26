@@ -2,6 +2,7 @@
 #define __FDATETIME_H__
 
 #include "core/core.h"    // CORE_API
+#include "core/hash.h"    // the mixer — GetHash
 
 class ibString;                          // core/fstring.h - the date's text; the family meets in backend_core.h
 class ibDictionary;                      // core/localization/dictionary.h - the language the calendar's names are asked in
@@ -137,6 +138,8 @@ public:
 	// The count itself - milliseconds from the empty date - for a date stored as a number.
 	constexpr explicit ibDateTime(long long value) noexcept : m_value(value) {}
 	constexpr long long GetValue() const noexcept { return m_value; }
+	// THE DATE'S HASH — its whole count, to the millisecond, octet by octet (core/hash.h).
+	constexpr std::uint64_t GetHash() const noexcept { return ibHashStep(kIbHashBasis, static_cast<std::uint64_t>(m_value)); }
 
 	// NOW: what the machine's clock on the wall shows - the clock's reading in the machine's zone, by its
 	// parts, to the millisecond, with no wx on the way. The one door the engine asks "now" through, so the

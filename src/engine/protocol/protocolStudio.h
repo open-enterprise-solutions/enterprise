@@ -731,6 +731,7 @@ namespace ibProtocol {
 			inline constexpr const char* Presentation     = "Presentation";
 			inline constexpr const char* Reference        = "Reference";         // the table's own reference type (a class id as text)
 			inline constexpr const char* Platform         = "Platform";          // the platform declares it (ibQueryConstructorSource::m_platform)
+			inline constexpr const char* Lockable         = "Lockable";          // a LOCK of it holds (ibQueryConstructorSource::m_lockable)
 			inline constexpr const char* Fields           = "Fields";            // rows as a settings field tree reads them
 			inline constexpr const char* References       = "References";        // …and which of their types are references
 			inline constexpr const char* Parameters       = "Parameters";
@@ -751,7 +752,8 @@ namespace ibProtocol {
 			inline constexpr const char* UngroupedProjections = "UngroupedProjections";
 
 			enum class ibRequest : int {
-				Sources          = 24,   // {} — every source a query may name: Sources, rows {Path, Presentation, Reference, Platform}
+				Sources          = 24,   // {} — every source a query may name: Sources, rows {Path, Presentation, Reference, Platform,
+			                         // Lockable}
 				                         // (GetSources); Kinds, rows {Name, Picture} (as Linq's Kinds)
 				Fields           = 25,   // {Source [, Slot]} — its fields: Fields, References, Error (GetFields; with Slot —
 				                         // GetConditionFields)

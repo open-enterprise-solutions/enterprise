@@ -6,8 +6,8 @@
 #include "backend/srcObject.h"          // ibSourceObject (base) + ibValueMetaObjectCompositeData fwd
 #include "backend/srcColumn.h"          // ibBackendSourceColumn / ibTypeDescription (a node's descriptor, nested ibSourceExplorer)
 #include "backend/uniqueKey.h"          // ibUniqueKey (GetGuid)
-#include "backend/lock/lockHandle.h"    // ibLockHandle (m_formLockHandle)
-#include "backend/lock/lockTypes.h"     // ibLockMode (TryAcquireFormLock)
+#include "backend/lock/lockHandle.h"    // ibLockHandle (m_lockHandle)
+#include "backend/lock/lockTypes.h"     // ibLockMode (TryLock)
 #include "backend/compiler/value.h"     // ibValue (inline GetValueByPath default-constructs one)
 #include "core/description/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
 #include "backend/createRequest.h"      // ibSelectMode — what choosing a field's value opens on (GetSelectMode)
@@ -296,20 +296,16 @@ public:
 	virtual void SourceIncrRef() = 0;
 	virtual void SourceDecrRef() = 0;
 
-	// Long-held sys_lock acquire/release for form-open hold pattern.
-	// Default = no-op (sources without a meaningful lock identity
-	// — DataTool, Report — just silently succeed). Concrete
-	// data-bound sources override:
-	//   ibValueRecordDataObjectRef → keys by ref guid
-	//   (future) ibValueRecordSetObject → keys by m_keyValues
-	//   (future) ibValueConstantDataObject → keys by const name
+	// THE SOURCE'S OWN LOCK — the script's Lock() / Unlock(), and whoever edits the source asks the same: taken at
+	// once or refused (ibBackendLockException), held until Unlock or the source's end. Default = no-op (sources
+	// without a lock identity — DataTool, Report — succeed). Concrete data-bound sources override:
+	//   ibValueRecordDataObjectRef      → keys by its Ref
+	//   ibValueRecordDataObjectConstant → keys by its namespace
 	//
-	// Storage lives on the base (m_formLockHandle below) — overrides
-	// reuse the same field for RAII release on source dtor.
-	//
-	// See docs/private/record-locks.md "Planned upgrade path" / Phase B.3.
-	virtual bool TryAcquireFormLock(ibLockMode /*mode*/ = ibLockMode::Exclusive) { return true; }
-	virtual void ReleaseFormLock() { m_formLockHandle.Release(); }
+	// Storage lives on the base (m_lockHandle below) — overrides reuse the same field for RAII release on the
+	// source's dtor. See docs/private/record-locks.md.
+	virtual bool TryLock(ibLockMode /*mode*/ = ibLockMode::Exclusive) { return true; }
+	virtual void Unlock() { m_lockHandle.Release(); }
 
 	//override default type object
 	virtual bool IsNewObject() const { return true; }
@@ -457,12 +453,14 @@ public:
 
 protected:
 	
-	// Storage for TryAcquireFormLock / ReleaseFormLock. RAII-released
-	// on source destruction (form holds source via refcount; source
-	// dies when form closes → handle dtor DELETEs sys_lock row).
-	// Empty by default; populated by concrete-source overrides of
-	// TryAcquireFormLock.
-	ibLockHandle m_formLockHandle;
+	// Storage for TryLock / Unlock. RAII-released on the source's destruction (its holders keep it by refcount; the
+	// last one gone → the handle's dtor DELETEs the sys_lock row). Empty by default; filled by the concrete
+	// sources' overrides of TryLock.
+	ibLockHandle m_lockHandle;
+	// The source's own lock was asked for (TryLock — whoever asked: the script's Lock, an editor of it).
+	// Its write keeps to that lock, taken at once or refused at once; a source nobody asked to lock has its write hold
+	// it for the transaction and wait a held one out (docs/private/record-locks.md, stage 14).
+	bool m_lockAsked = false;
 
 	// Per-instance self-description — created WITH the source, owner-bound at construction. ONLY
 	// subclasses fill it (each source builds its own nodes); external code reads it via GetSourceExplorer.

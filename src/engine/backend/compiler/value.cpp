@@ -244,17 +244,6 @@ bool ibValue::CompareValueEQ(const ibVariant& cParam) const
 // is stated over CompareValueLS (see value.h), so it reads in order — the
 // ordering first, then the hash that has to agree with it.
 
-// A whole scalar payload, fed through the shared mixer OCTET BY OCTET — which is
-// what FNV-1a actually is, and what a raw 64-bit payload needs: the composite
-// hashes above fold values that are already well-mixed hashes, these fold a date
-// or an integer straight off the field.
-static inline std::uint64_t HashStep(std::uint64_t h, std::uint64_t v)
-{
-	for (int i = 0; i < 8; ++i, v >>= 8)
-		h = ibHashCombine(h, v & 0xFF);
-	return h;
-}
-
 size_t ibValue::GetValueHash() const
 {
 	switch (m_typeClass)
@@ -269,20 +258,14 @@ size_t ibValue::GetValueHash() const
 	// rank in the order now (see KindRank) — a boolean is never order-equal to a
 	// number, so nothing forces their hashes together and neither has to be
 	// blurred to meet the other. A date keeps its full count for the same
-	// reason: the /1000 it used to carry existed only to meet GetNumber().
+	// reason: the /1000 it used to carry existed only to meet GetNumber(). Each
+	// payload hashes itself (GetHash): a number by its value, 1 and 1.0 together.
 	case ibValueTypes::TYPE_BOOLEAN:
-		return (size_t)HashStep(kIbHashBasis, m_bData ? 1u : 0u);
+		return (size_t)m_bData.GetHash();
 	case ibValueTypes::TYPE_DATE:
-		return (size_t)HashStep(kIbHashBasis, (uint64_t)m_dData.GetValue());
-	// A number still blurs to its integer part, and that one is NOT optional:
-	// 1 and 1.0 are the same number and must share a bucket. 1.5 joining them
-	// costs one comparison.
-	case ibValueTypes::TYPE_NUMBER: {
-		long long whole = 0;
-		if (m_fData.ToInt(whole) != 0)
-			return (size_t)HashStep(kIbHashBasis, ~0ULL);   // past int64 — one bucket for all of them
-		return (size_t)HashStep(kIbHashBasis, (uint64_t)whole);
-	}
+		return (size_t)m_dData.GetHash();
+	case ibValueTypes::TYPE_NUMBER:
+		return (size_t)m_fData.GetHash();
 
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
@@ -291,14 +274,10 @@ size_t ibValue::GetValueHash() const
 	// Text, and the object kinds that ORDER as text (CompareValueLS routes them
 	// through CompareAsText) — so an enum and the string of its presentation land
 	// in the same bucket, which is what their order says about them.
-	default: {
-		ibString built;
-		const ibString& text = m_typeClass == ibValueTypes::TYPE_STRING ? m_sData : (built = GetString());   // a string's own text, read in place
-		std::uint64_t h = kIbHashBasis;
-		for (const ibChar* p = text.c_str(); *p != ibT('\0'); ++p)
-			h = ibHashCombine(h, *p);
-		return (size_t)h;
-	}
+	default:
+		if (m_typeClass == ibValueTypes::TYPE_STRING)
+			return (size_t)m_sData.GetHash();   // a string's own text, read in place
+		return (size_t)GetString().GetHash();
 	}
 }
 

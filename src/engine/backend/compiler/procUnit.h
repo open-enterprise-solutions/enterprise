@@ -64,6 +64,12 @@ BACKEND_API void ibLinqGroups(ibValue& out, ibValue& scratch);
 BACKEND_API void ibLinqRow(ibValue& out, ibValue& shapeSlot, const ibString& names, long count);
 BACKEND_API void ibLinqField(ibValue& row, const ibValue& value, long ordinal);
 
+// The block's `lock` — the source holds its tables, keyed by the `where` that stands at [whereFrom, whereTo) of the
+// tape and reads the row in `rowSlot` (equal ends: no where, the whole source). It is the package's LOCK over the
+// source's query name, so what it holds and for how long is the LOCK's; a source that is not the base's refuses.
+BACKEND_API void ibLinqLock(const ibValue& source, const ibByteCode& byteCode, long whereFrom, long whereTo,
+	const ibParamRunUnit& rowSlot, bool shared, const ibRunContext* frame);
+
 // ⭐⭐ DOES THIS ROW NAME ITS COLUMNS? — the one question that decides whether a query answers with a
 // TABLE or with an Array, and it is exported because TWO readers ask it. The runtime asks it of a
 // real row on its way to building the answer; the editor asks it of a SAMPLE row, standing after the

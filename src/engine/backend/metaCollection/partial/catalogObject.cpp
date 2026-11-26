@@ -122,10 +122,10 @@ bool ibValueRecordDataObjectCatalog::CallAsProc(const long lMethodNum, ibValue**
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectCatalog::FillMethods))
 	{
 	case Func::enLock:
-		TryAcquireFormLock();
+		TryLock();
 		return true;
 	case Func::enUnlock:
-		ReleaseFormLock();
+		Unlock();
 		return true;
 	}
 

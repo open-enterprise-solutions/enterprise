@@ -79,19 +79,20 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 	return succes;
 }
 
-bool ibValueRecordDataObjectRef::TryAcquireFormLock(ibLockMode mode)
+bool ibValueRecordDataObjectRef::TryLock(ibLockMode mode)
 {
+	m_lockAsked = true;                       // its write keeps to this lock from now (BeginWriteScope)
 	if (m_newObject)            return true;  // no DB row to identify yet
-	if (m_formLockHandle.IsValid()) return true;  // already held
+	if (m_lockHandle.IsValid()) return true;  // already held
 
 	// Default options — wait at driver's normal lock-timeout. Throws
 	// ibBackendLockException::LockConflict if another session holds an
-	// incompatible lock; caller propagates as form-open failure.
+	// incompatible lock; the caller decides what a refusal means.
 	auto* lm = ibApplicationInstance::GetLockManager();
 	if (lm == nullptr)
 		ibBackendCoreException::Error(_("Lock manager not initialised"));
-	m_formLockHandle = lm->Acquire({
-		ibLockItem::ForRef(m_metaObject->GetDocPath(), m_objGuid, mode, m_metaObject->GetSynonym())
+	m_lockHandle = lm->Acquire({
+		ibLockItem::ForRef(m_metaObject->GetDocPath(), ibValue(GetSourceReference()), mode, m_metaObject->GetSynonym())
 	});
 	return true;
 }
@@ -186,7 +187,7 @@ void ibValueRecordDataObjectRef::CaptureLoadedDataVersion()
 //----------------------------------------------------------------------
 // Phase A scaffold helpers — pre/post bookkeeping extracted from the
 // per-subclass WriteObject / DeleteObject bodies. Lives here next to
-// the lock methods (TryAcquireFormLock / LockAndCheckDataVersion)
+// the lock methods (TryLock / LockAndCheckDataVersion)
 // they call into — the helpers themselves are lock-orchestration over
 // the DB-query primitives, so this is their natural home.
 // See commonObject.h ibValueRecordDataObjectRef Begin*/Commit* docs.
@@ -213,7 +214,8 @@ bool ibValueRecordDataObjectRef::BeginWriteScope(ibConnectionScope& scope)
 	}
 
 	scope.SafeBeginTransaction();
-	TryAcquireFormLock();                                  // soft-lock re-attempt
+	if (m_lockAsked)
+		TryLock();                                         // its own lock: taken, or refused at once
 	LockAndCheckDataVersion(/*bump=*/true);                // row lock + version + bump
 	return true;
 }
@@ -234,7 +236,8 @@ bool ibValueRecordDataObjectRef::BeginDeleteScope(ibConnectionScope& scope)
 	}
 
 	scope.SafeBeginTransaction();
-	TryAcquireFormLock();
+	if (m_lockAsked)
+		TryLock();                                         // as the write scope above
 	LockAndCheckDataVersion(/*bump=*/false);               // no bump — row going away
 	return true;
 }
@@ -387,6 +390,11 @@ bool ibValueRecordDataObjectRef::SaveData()
 	// REWRITE — a guarded UPDATE (WHERE key AND the folded RLS predicate), so a write Restrict actually bites
 	// (a plain UPSERT has no WHERE and would ignore the folded predicate). new=true -> Insert, new=false ->
 	// Update; creation and write stay separate events, and the rewrite enforces the row filter.
+	// ⭐ A REWRITE HOLDS ITS ROW until the transaction ends (docs/private/record-locks.md, stage 14) — a `LOCK … WHERE
+	// Ref = &R` of it held elsewhere is waited out, as a LOCK waits. Its own lock, when asked, was taken in the scope
+	// (TryLock): the same holder, so this one adds nothing. How it is held is the provider's.
+	if (!m_newObject)
+		writer.WithLock(ibLockMode::Exclusive);
 	bool hasError = m_newObject ? !writer.Insert() : !writer.Update();
 
 	// ⭐ TABLE PARTS — WRITTEN WHEN THE OBJECT CHANGED. A part is the object: every verb that changes a line marks
@@ -466,6 +474,7 @@ bool ibValueRecordDataObjectRef::DeleteData()
 	ibDataQueryBuilder()
 		.From(m_metaObject->GetQueryable())
 		.WhereKey(m_objGuid)
+		.WithLock(ibLockMode::Exclusive)   // the row it deletes held, as a rewrite holds it
 		.Delete();
 	return true;
 }

@@ -122,6 +122,23 @@ public:
 		return -1;
 	}
 
+	// ⭐ A LOCK OVER ITS SOURCE, HELD ITS OWN WAY (Max, 2026-11-26: "the query keeps a thin facade; the machinery of a lock
+	// is inside each provider"). A LOCK reads off its text which values of which fields it holds and hands each table's
+	// keys to that table's provider (the door's Lock); a record set's and an object's write come the same road. `spec`
+	// is the source and the connection its statements run on, as a write's; `keys` say the fields and the mode — where
+	// they live and what a refusal calls the table are the provider's. With `spec.m_lock` (WithLock) the provider gives
+	// them to the transaction those statements run in itself, as a write's hold, and refuses when none is open; what it
+	// gives back is kept by whoever else holds the lock (a TempDataManager) and means nothing to them: let go, the lock goes.
+	// Null (the default): its sources hold nothing another session writes — a temporary table, a nested query.
+	virtual std::shared_ptr<void> ExecuteLock(const ibDataQuerySpec& /*spec*/, const std::vector<struct ibLockItem>& /*keys*/)
+	{
+		return nullptr;
+	}
+	// …AND WHETHER IT HOLDS ONE OF `queryable` AT ALL — ExecuteLock's own gate, asked ahead: the query constructor greys
+	// what a LOCK would be refused on. Not whether a call now would hold anything (a transaction that is the lock, a
+	// wait): that is the moment's. False (the default) where ExecuteLock gives null.
+	virtual bool CanLock(const std::shared_ptr<const ibBackendQueryable>& /*queryable*/) const { return false; }
+
 	// Resolve a reference COLUMN of `queryable` to the queryable it points at — the dot-walk join
 	// target. METADATA-BACKED, so the resolution lives in the ONE provider that owns metadata (the
 	// DB provider: clsid -> GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData).

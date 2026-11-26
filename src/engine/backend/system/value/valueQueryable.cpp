@@ -26,6 +26,7 @@
 #include "backend/compiler/procContext.h"                         // ibRunContext — captured-frame name lookup
 #include "backend/compiler/typeCtor.h"                            // SYSTEM_TYPE_REGISTER
 #include "backend/backend_exception.h"
+#include "core/stringTokenizer.h"                                 // ibStringTokenize — a source's name, a segment at a time
 
 #include <optional>
 
@@ -841,6 +842,47 @@ bool ibValueQueryable::NarrowByInstructions(const ibByteCode& byteCode, long fro
 	m_builder.Where(pred);
 	m_ops.push_back(ibT("Where"));
 	return true;
+}
+
+void ibValueQueryable::LockByInstructions(const ibByteCode& byteCode, long from, long to,
+	const ibParamRunUnit& rowSlot, const ibParamRunUnit& resultSlot, ibQueryLockModeAst mode, const ibRunContext* frame)
+{
+	// ⭐⭐ THE BLOCK'S `lock` IS THE PACKAGE'S LOCK — `LOCK <this source> WHERE <the where before it>`, run as one, so
+	// the table, its keys and the transaction that keeps them are told by the one step (queryLock.cpp). The source
+	// is named as a query names it; a value table handed in (`From`) has no such name, and no table of the base.
+	ibQueryAstLock lock;
+	lock.m_mode = mode;
+	lock.m_select = std::make_shared<ibQuerySelect>();
+	ibQuerySelect& held = *lock.m_select;
+	held.m_from.m_name = ibStringTokenize(m_sourceName, ibT("."));
+	if (m_queryable == nullptr || held.m_from.m_name.size() < 2)
+		ibBackendCoreException::Error(_("lock holds tables of the base, and '%s' is not one"), m_sourceName);
+
+	// No `where` before it: nothing narrows the key, and the table is held whole — as a LOCK with no WHERE.
+	std::map<ibString, ibValue> captured;
+	if (from < to) {
+		ibString refused;
+		held.m_where = ibBuildQueryAstFromRange(byteCode, from, to, rowSlot, resultSlot, &refused);
+		if (!held.m_where)
+			ibBackendCoreException::Error(_("lock is keyed by the where before it, and that where does not read as a query's condition: %s"),
+				refused.IsEmpty() ? ibString(ibT("(no reason)")) : refused);
+		if (!CollectCaptured(*held.m_where, frame, captured))
+			ibBackendCoreException::Error(_("lock is keyed by the where before it, and a value that where reads is not "
+				"a plain variable of this procedure"));
+	}
+
+	// The package finds the source by its name in the application in scope, and a block opens none: a New Query
+	// opens its session's (valueQuery.cpp), the composer its own. This source knows whose it is — left to the base
+	// factory, where no catalog registers, the name was "unknown metaobject kind 'Catalog'" (2026-11-26).
+	const ibMetaData* application = m_queryable->GetMetaData();
+	if (application == nullptr)
+		application = ibSourceMetaDataScope::Get();
+	const ibSourceMetaDataScope resolveAgainst(application);
+
+	ibQueryPackage package;
+	package.m_statements.emplace_back();
+	package.m_statements.back().m_lock = std::make_shared<ibQueryAstLock>(std::move(lock));
+	ibQueryLowering::ExecutePackage(package, captured);
 }
 
 std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()

@@ -2643,6 +2643,17 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 
+	// ⭐ THE PLACE OF A `lock`, before the first row is read — the outermost source only, the one a lock may hold.
+	// It does nothing until the clause fills it in (the tail below), which it can only do from here: the clause
+	// is met after the loop has opened.
+	if (linqCtx->m_linqQuery->m_bindings.empty()) {
+		ibByteUnit c; StampSource(c);
+		c.m_numOper = OPER_LINQ_LOCK;
+		c.m_param1  = b.iterInSlot;
+		c.m_param4  = b.valueSlot;
+		m_cByteCode.m_listCode.emplace_back(std::move(c));
+	}
+
 	// OPER_FOREACH header
 	{
 		ibByteUnit c; StampSource(c);
@@ -2705,6 +2716,13 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 	// keeps registering into the loop's continue list as before.
 	std::vector<int> skipContinueGotoIps;
 
+	// THE `where` A `lock` IS KEYED BY — the one standing right before it: its first instruction and the OPER_IF
+	// that asks its answer, -1 once another clause stands between. And how many this level has read, because a
+	// lock keyed by one of several would hold less than they say together.
+	int lockWhereFrom = -1;
+	int lockWhereIf   = -1;
+	int wheresRead    = 0;
+
 	// JOIN clauses appear after `from`, before tail clauses (C# grammar).
 	// Each emits per-iter lookup + its bucket FOREACH inline in outer
 	// body + records an ibLinqPendingJoin for the trampoline (hash
@@ -2740,6 +2758,40 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				c.m_param2.m_numIndex = 0;  // back-patched below
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 				whereSkipIps.push_back((int)m_cByteCode.m_listCode.size() - 1);
+				lockWhereFrom = whereFrom;
+				lockWhereIf   = whereSkipIps.back();
+				++wheresRead;
+				continue;
+			}
+
+			// ⭐⭐ LOCK — the source's records held before its first row is read, until the transaction ends,
+			// keyed by the `where` right before it; a `where` after it only filters (docs/private/record-locks.md).
+			// Nothing is emitted here: the clause fills in the place the loop's header left before it
+			// (OPER_LINQ_LOCK), which runs before a row is read — a lock taken here would come after the first.
+			if (IsNextKeyword(KEY_LOCK)) {
+				ExpectKeyword(KEY_LOCK);
+				bool shared = false;   // a modifier, read as `descending` is after an ordering key
+				if (IsNextKeyword(KEY_SHARED)) {
+					ExpectKeyword(KEY_SHARED);
+					shared = true;
+				}
+
+				// The query's ONE source, held once: a second `from`, a `join`, the groups after `into` are rows
+				// a lock here does not stand before — and its place is there only before the first source's loop.
+				const int placeIp = b.foreachStartIp - 1;
+				if (b.origin != ibLinqBinding::FromSource || !pendingJoins.empty() || placeIp < 0
+					|| m_cByteCode.m_listCode[placeIp].m_numOper != OPER_LINQ_LOCK
+					|| m_cByteCode.m_listCode[placeIp].m_param3.m_numIndex != 0)
+					Refuse(ibScriptError_LinqLockSource);
+				if (wheresRead > 1 || (wheresRead == 1 && lockWhereIf < 0))
+					Refuse(ibScriptError_LinqLockWhere);
+
+				ibByteUnit& place = m_cByteCode.m_listCode[placeIp];
+				const int none = (int)m_cByteCode.m_listCode.size();   // no `where`: an empty range, the table whole
+				place.m_param2.m_numIndex = wheresRead == 1 ? lockWhereFrom : none;
+				place.m_param2.m_numArray = wheresRead == 1 ? lockWhereIf : none;
+				place.m_param3.m_numIndex = shared ? 2 : 1;
+				lockWhereIf = -1;
 				continue;
 			}
 
@@ -2751,6 +2803,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// OPER_LET so __keys.Add reads it as a normal variable.
 			if (IsNextKeyword(KEY_ORDERBY)) {
 				ExpectKeyword(KEY_ORDERBY);
+				lockWhereIf = -1;   // a `lock` after it is not keyed by a where further up
 
 				// ⭐⭐ AS MANY KEYS AS THE CLAUSE NAMES, separated by commas — `orderby Warehouse,
 				// Item` is how an ordering is actually written, and until 2026-09-08 the comma was
@@ -2818,6 +2871,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 
 			const ibString aliasReal = ExpectIdentifier(true);
 			ExpectDelimiter('=');
+			lockWhereIf = -1;   // as after an `orderby`
 			const ibParamUnit aliasSlot = context->GetVariable(aliasReal);
 			{
 				ibByteUnit c; StampSource(c);

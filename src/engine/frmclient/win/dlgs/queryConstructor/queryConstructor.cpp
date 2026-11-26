@@ -397,6 +397,12 @@ static void ibDropTotalsFromPackage(ibQueryPackage& package)
 		if (statement.m_select)
 			ibQueryDropTotals(*statement.m_select);
 }
+
+static void ibDropLocksFromPackage(ibQueryPackage& package)
+{
+	std::erase_if(package.m_statements,
+		[](const ibQueryAstStatement& statement) { return statement.IsLock() || statement.IsUnlock(); });
+}
 ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
                                                    const ibMetaData* metaData, bool readOnly, int exclude)
 	: ibDialog(parent, wxID_ANY, _("Query constructor"), wxDefaultPosition, wxSize(1040, 720),
@@ -416,6 +422,8 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 		ibDropTotalsFromPackage(m_package);
 	if ((m_exclude & ibQueryExclude_Roles) != 0)
 		ibQueryDropRoles(m_package);
+	if ((m_exclude & ibQueryExclude_Locks) != 0)
+		ibDropLocksFromPackage(m_package);
 
 	// ONE FONT, SET BEFORE ANYTHING IS BUILT. Controls made at different times otherwise pick up
 	// different defaults and the window reads as several dialogs stitched together — and setting it
@@ -495,23 +503,25 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// The LAST field is the exclusion bit — which flag of the host's mask turns this tab off. Every
 	// tab carries one, so a host that owns a setting itself (a composition's totals, a list's
 	// grouping) says so with a flag rather than with a new parameter here.
-	m_pages.push_back({ BuildTablesPage(m_notebook),     _("Tables and fields"), wxART_TABLE,      true,  false, false, false, ibQueryExclude_Tables });
+	// ⭐ A LOCK keeps the first tab under its own caption — the tables it holds, no fields beside them — and the
+	// links and the conditions as a query has them; what is done with selected fields is refused (Max, 2026-11-26).
+	m_pages.push_back({ BuildTablesPage(m_notebook),     _("Tables and fields"), wxART_TABLE,      true,  false, false, false, ibQueryExclude_Tables, false, false, _("Locked tables") });
 	m_pages.push_back({ BuildLinksPage(m_notebook),      _("Links"),             wxART_LINKS,      true,  true,  false, false, ibQueryExclude_Links });
-	m_pages.push_back({ BuildGroupingPage(m_notebook),   _("Grouping"),          wxART_GROUPING,   true,  false, false, false, ibQueryExclude_Grouping });
+	m_pages.push_back({ BuildGroupingPage(m_notebook),   _("Grouping"),          wxART_GROUPING,   true,  false, false, false, ibQueryExclude_Grouping, false, true });
 	m_pages.push_back({ BuildConditionsPage(m_notebook), _("Conditions"),        wxART_FILTER,     true,  false, false, false, ibQueryExclude_Conditions });
 	m_pages.push_back({ BuildAdvancedPage(m_notebook),   _("Advanced"),          wxART_ADVANCED,   false, false, false, false, ibQueryExclude_Advanced });
 	// UNIONS / ALIASES — one tab, because it is one question. An output field's NAME is what a union
 	// lines its branches up BY, so the place that shows the line-up is the place the name is typed;
 	// the tab is called both things because it genuinely is both.
-	m_pages.push_back({ BuildUnionsPage(m_notebook),     _("Unions / Aliases"),  wxART_UNIONS,     true,  false, false, false, ibQueryExclude_Unions });
+	m_pages.push_back({ BuildUnionsPage(m_notebook),     _("Unions / Aliases"),  wxART_UNIONS,     true,  false, false, false, ibQueryExclude_Unions, false, true });
 	// ⭐ ORDER IS REFUSED FOR A TEMP TABLE TOO, exactly as Totals is below it (Max): what is
 	// materialised under a name is ROWS, and a table keeps no order — sorting on the way into storage
 	// is work thrown away in the same breath. The parser refuses it, so the tab goes rather than
 	// being left to write text the engine will reject.
-	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             wxART_SORT,       true,  false, false, true,  ibQueryExclude_Order });
+	m_pages.push_back({ BuildOrderPage(m_notebook),      _("Order"),             wxART_SORT,       true,  false, false, true,  ibQueryExclude_Order, false, true });
 	// Totals is refused for a statement that makes a temp table — the parser says so, so the tab
 	// goes rather than being left to write text the engine rejects. A HOST may exclude it as well.
-	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            wxART_TOTALS,     true,  false, false, true,  ibQueryExclude_Totals });
+	m_pages.push_back({ BuildTotalsPage(m_notebook),     _("Totals"),            wxART_TOTALS,     true,  false, false, true,  ibQueryExclude_Totals, false, true });
 	m_pages.push_back({ BuildIndexPage(m_notebook),      _("Index"),             wxART_INDEX,      true,  false, true,  false, ibQueryExclude_Index });
 	m_pages.push_back({ BuildPackagePage(m_notebook),    _("Query batch"),       wxART_QUERY_BATCH, false, false, false, false, ibQueryExclude_Batch });
 	// ⭐ …AND ONE TIER UP: links between the results the package has NAMED. Not a query tab — it is
@@ -673,6 +683,12 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 			    && (std::size_t)statement.m_linkIndex < m_package.m_links.size()
 				? wxString::Format(_("links %s"), m_package.m_links[statement.m_linkIndex].m_left)
 				: _("links the named selections");
+		// …AND SO DO A LOCK AND AN UNLOCK — where a lock stands is where it holds from.
+		if (statement.IsLock())
+			return ibString::Format(statement.m_lock->m_mode == ibQueryLockModeAst::Shared
+				? _("locks %s for reading") : _("locks %s"), ibQuerySourceLabel(statement.m_lock->m_select->m_from));
+		if (statement.IsUnlock())
+			return ibString::Format(_("unlocks %s"), statement.m_unlock);
 		if (statement.m_select && !statement.m_select->m_intoTemp.IsEmpty())
 			return ibString::Format(_("makes the temp table %s"), statement.m_select->m_intoTemp);
 		if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
@@ -2490,9 +2506,12 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 
 	auto changed = [this](wxCommandEvent& e) { OnAdvancedChanged(e); };
 
-	// ---- WHICH RECORDS: the three words that narrow the selection itself.
+	// ---- WHICH RECORDS: the three words that narrow the selection itself, and the one a LOCK holds them by.
 	ibStaticBoxSizer* selection = new ibStaticBoxSizer(wxVERTICAL, page, _("Record selection"));
 	wxWindow* selectionBox = selection->GetStaticBox();
+	// ⚠ ONE ROW HEIGHT FOR ALL — the counter's, the tallest. Each row as tall as its own control set the checkboxes
+	// closer to each other than to the counter's row above them (Max, 2026-11-26: "no even spaces between them").
+	wxGridSizer* rows = new wxGridSizer(1, wxSize(0, FromDIP(2)));
 
 	wxBoxSizer* topRow = new wxBoxSizer(wxHORIZONTAL);
 	m_useTop = new ibCheckBox(selectionBox, wxID_ANY, _("First"));
@@ -2502,18 +2521,28 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 		FromDIP(wxSize(90, -1)), wxSP_ARROW_KEYS, 1, 1000000, 10);
 	m_topCount->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { wxCommandEvent e; OnAdvancedChanged(e); });
 	topRow->Add(m_topCount, 0, wxALIGN_CENTER_VERTICAL);
-	selection->Add(topRow, 0, wxALL, FromDIP(4));
+	rows->Add(topRow, 0, wxALIGN_CENTER_VERTICAL);
 
 	m_distinct = new ibCheckBox(selectionBox, wxID_ANY, _("No duplicates"));
 	m_distinct->Bind(wxEVT_CHECKBOX, changed);
-	selection->Add(m_distinct, 0, wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
+	rows->Add(m_distinct, 0, wxALIGN_CENTER_VERTICAL);
 
 	// ALLOWED — a word, not a switch buried in a list, because the sentence it changes matters:
 	// a refusal becomes silence, and silence is only honest when it was asked for.
 	m_allowed = new ibCheckBox(selectionBox, wxID_ANY, _("Allowed only"));
 	m_allowed->SetToolTip(_("Skip what this user may not read instead of refusing the whole query"));
 	m_allowed->Bind(wxEVT_CHECKBOX, changed);
-	selection->Add(m_allowed, 0, wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
+	rows->Add(m_allowed, 0, wxALIGN_CENTER_VERTICAL);
+
+	// HOW A LOCK HOLDS THE RECORDS — the language's own word (LOCK SHARED), live for the Lock kind alone. A host that
+	// holds no lock has no such word to offer (ibQueryExclude_Locks) — and a grid keeps a hidden row's place.
+	if ((m_exclude & ibQueryExclude_Locks) == 0) {
+		m_lockShared = new ibCheckBox(selectionBox, wxID_ANY, ibQueryKeywordText(ibQueryKeyword::Shared));
+		m_lockShared->SetToolTip(_("Other sessions may hold the same data to read it; one that writes waits"));
+		m_lockShared->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ApplyQueryKind(false); });
+		rows->Add(m_lockShared, 0, wxALIGN_CENTER_VERTICAL);
+	}
+	selection->Add(rows, 0, wxALL, FromDIP(4));
 	groups->Add(selection, 0, wxEXPAND | wxALL, FromDIP(6));
 
 	// ---- WHAT THIS STATEMENT IS. A KIND, not a checkbox: three different statements, and the name
@@ -2532,10 +2561,19 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 	// kind and not the same thing — a temporary table is read by later statements, a named result is
 	// asked for by whoever runs the package, by name instead of by position.
 	kinds.Add(_("Select under a name"));
+	// …AND THE PAIR THAT HOLDS DATA (Max, 2026-11-26): a LOCK reads tables, links and conditions and selects nothing;
+	// an UNLOCK is its DROP — a name and nothing else.
+	kinds.Add(_("Lock data"));
+	kinds.Add(_("Unlock data"));
 	m_queryKind = new ibRadioBox(kindBox, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 		kinds, 1, wxRA_SPECIFY_COLS);
 	m_queryKind->SetSelection(0);
 	m_queryKind->Bind(wxEVT_RADIOBOX, &ibDialogQueryConstructor::OnQueryKindChanged, this);
+	// A host that holds no lock leaves the pair out (ibQueryExclude_Locks).
+	if ((m_exclude & ibQueryExclude_Locks) != 0) {
+		m_queryKind->Show(4, false);
+		m_queryKind->Show(5, false);
+	}
 	kind->Add(m_queryKind, 0, wxEXPAND | wxALL, FromDIP(4));
 
 	// ONE FIELD, because all three naming kinds ask the same thing: what this statement's name is.
@@ -2551,14 +2589,6 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 	groups->Add(kind, 0, wxEXPAND | wxTOP | wxBOTTOM | wxRIGHT, FromDIP(6));
 
 	sizer->Add(groups, 0, wxEXPAND);
-
-	m_forUpdate = new ibCheckBox(page, wxID_ANY, _("Lock the rows read, so they can be changed after"));
-	m_forUpdate->Bind(wxEVT_CHECKBOX, changed);
-	sizer->Add(m_forUpdate, 0, wxALL, FromDIP(10));
-
-	// The reference also lets the author pick WHICH tables are locked. Ours locks the read, whole —
-	// `ibReadPageRequest::m_lockForUpdate` is one flag on one statement — so there is nothing here
-	// to choose between, and a list that pretended otherwise would be a control over nothing.
 
 	page->SetSizer(sizer);
 	return page;

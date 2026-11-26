@@ -380,6 +380,32 @@ ibString JoinKindText(ibQueryJoinKindAst kind)
 	return Kw(ibQueryKeyword::Inner);
 }
 
+// The tables joined to the first one — a select's and a lock's, one phrase in both.
+ibString RenderJoins(const std::vector<ibQueryAstJoin>& joins, int indent)
+{
+	const ibString pad(ibT(' '), indent);
+	const ibString item = pad + ibT("\t");
+	ibString out;
+	for (const auto& join : joins) {
+		// ⭐⭐ NO CONDITION IS WRITTEN AS A COMMA — `FROM A, B`, the product. A `JOIN` with nothing
+		// after it says the same thing to the machine and something else entirely to a reader: it is
+		// indistinguishable from a sentence somebody stopped writing, which is why the parser now
+		// refuses one.
+		//
+		// ⚠ AND THE TWO HALVES MUST LAND TOGETHER. I taught the parser to require ON and left this
+		// writing `JOIN X` — so the constructor produced text its own parser threw back at it, on a
+		// query nobody had touched. A round trip is only a round trip when both directions agree.
+		if (!join.m_on) {
+			out += ibT(",\n") + item + RenderSource(join.m_source, indent + kNestedIndent);
+			continue;
+		}
+		out += ibT("\n") + pad + JoinKindText(join.m_kind) + ibT(" ") + Kw(ibQueryKeyword::Join)
+			+ ibT("\n") + item + RenderSource(join.m_source, indent + kNestedIndent);
+		out += ibT("\n") + item + Kw(ibQueryKeyword::On) + ibT(" ") + RenderExpr(*join.m_on);
+	}
+	return out;
+}
+
 // THE CLAUSE KEYWORD ALONE ON ITS LINE, ITS CONTENTS INDENTED UNDER IT. The keyword says what the
 // next lines ARE, so a reader scanning the left edge sees the shape of the query — SELECT, FROM,
 // WHERE, GROUP BY — and reads the details only where they matter. Everything a clause holds is a
@@ -447,23 +473,7 @@ ibString RenderSelect(const ibQuerySelect& select, int indent)
 		out += ibT("\n") + pad + Kw(ibQueryKeyword::From) + ibT("\n") + item
 		     + RenderSource(select.m_from, indent + kNestedIndent);
 
-	for (const auto& join : select.m_joins) {
-		// ⭐⭐ NO CONDITION IS WRITTEN AS A COMMA — `FROM A, B`, the product. A `JOIN` with nothing
-		// after it says the same thing to the machine and something else entirely to a reader: it is
-		// indistinguishable from a sentence somebody stopped writing, which is why the parser now
-		// refuses one.
-		//
-		// ⚠ AND THE TWO HALVES MUST LAND TOGETHER. I taught the parser to require ON and left this
-		// writing `JOIN X` — so the constructor produced text its own parser threw back at it, on a
-		// query nobody had touched. A round trip is only a round trip when both directions agree.
-		if (!join.m_on) {
-			out += ibT(",\n") + item + RenderSource(join.m_source, indent + kNestedIndent);
-			continue;
-		}
-		out += ibT("\n") + pad + JoinKindText(join.m_kind) + ibT(" ") + Kw(ibQueryKeyword::Join)
-			+ ibT("\n") + item + RenderSource(join.m_source, indent + kNestedIndent);
-		out += ibT("\n") + item + Kw(ibQueryKeyword::On) + ibT(" ") + RenderExpr(*join.m_on);
-	}
+	out += RenderJoins(select.m_joins, indent);
 
 	if (select.m_where)
 		out += ibT("\n") + pad + Kw(ibQueryKeyword::Where) + ibT("\n") + item + RenderExpr(*select.m_where);
@@ -618,10 +628,6 @@ ibString RenderSelect(const ibQuerySelect& select, int indent)
 			+ ibT("\n") + item + Join(columns, itemSep);
 	}
 
-	// LAST, and only on the outermost statement's own line: FOR UPDATE qualifies the whole read.
-	if (select.m_forUpdate)
-		out += ibT("\n") + pad + Kw(ibQueryKeyword::For) + ibT(" ") + Kw(ibQueryKeyword::Update);
-
 	return out;
 }
 
@@ -683,6 +689,26 @@ static ibString RenderLinkSection(const ibQueryPackage& package, int firstLink)
 	return wroteOne ? out : ibString();
 }
 
+// ⭐⭐ A LOCK, WRITTEN AS A SELECT'S FROM AND WHERE ARE — the keyword and its name on the first line (`LOCK Held`: what
+// an UNLOCK further down releases it by), FROM and the tables under it, the joins and the key after.
+static ibString RenderLock(const ibQueryAstLock& lock)
+{
+	const ibString item = ibT("\t");
+	ibString out = Kw(ibQueryKeyword::Lock);
+	if (lock.m_mode == ibQueryLockModeAst::Shared)
+		out += ibT(" ") + Kw(ibQueryKeyword::Shared);
+	if (!lock.m_name.IsEmpty())
+		out += ibT(" ") + lock.m_name;
+	// The tables, their links and the key — and nothing else the select may carry: the query constructor keeps a
+	// statement's fields behind a LOCK, as it keeps a query behind a DROP, so a kind chosen by mistake is undone whole.
+	const ibQuerySelect& held = *lock.m_select;
+	out += ibT("\n") + Kw(ibQueryKeyword::From) + ibT("\n") + item + RenderSource(held.m_from, kNestedIndent);
+	out += RenderJoins(held.m_joins, 0);
+	if (held.m_where)
+		out += ibT("\n") + Kw(ibQueryKeyword::Where) + ibT("\n") + item + RenderExpr(*held.m_where);
+	return out;
+}
+
 ibString ibRenderQueryPackage(const ibQueryPackage& package)
 {
 	// ';' SEPARATES the statements of a package and does NOT terminate the last one. It is the
@@ -698,6 +724,10 @@ ibString ibRenderQueryPackage(const ibQueryPackage& package)
 			text = Kw(ibQueryKeyword::Drop) + ibT(" ") + statement.m_dropTemp;
 		else if (statement.IsLink())
 			text = RenderLinkSection(package, statement.m_linkIndex);
+		else if (statement.IsLock())
+			text = RenderLock(*statement.m_lock);
+		else if (statement.IsUnlock())
+			text = Kw(ibQueryKeyword::Unlock) + ibT(" ") + statement.m_unlock;
 		else if (statement.m_select)
 			text = RenderSelect(*statement.m_select, 0);
 		// A statement with nothing to say — a link section still being filled — writes nothing at all,

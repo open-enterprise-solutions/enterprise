@@ -1,10 +1,12 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibLockHandle — RAII owner for a batch of sys_lock rows.
+// ibLockHandle — RAII owner for a batch of lock rows (the base's lock file).
 //
 // ibLockManager::Acquire returns a handle; the handle's dtor releases
-// all rows it owns (DELETE FROM sys_lock WHERE lockGuid IN (...)).
+// all rows it owns (ibLockManager::ReleaseRows, by their guids).
 // Move-only — there is exactly one owner of each lock-row set at any
-// time. Released early via explicit Release().
+// time. Released early via explicit Release(). A ticket: a transaction
+// keeps it to its end (ibDatabaseLayer::AddTicket), a TempDataManager
+// to its close.
 //
 // See docs/private/record-locks.md.
 /////////////////////////////////////////////////////////////////////////////
@@ -13,14 +15,16 @@
 #define _IB_LOCK_HANDLE_H_
 
 #include "backend/backend.h"
+#include "backend/databaseLayer/transactionTicket.h"
 #include "core/guid.h"
 
 #include <vector>
 
-class BACKEND_API ibLockHandle {
+class BACKEND_API ibLockHandle : public ibTransactionTicket {
 public:
+	virtual ~ibLockHandle() override;
+
 	ibLockHandle();
-	~ibLockHandle();
 
 	// Move-only: a handle is the sole owner of its lock rows.
 	ibLockHandle(ibLockHandle&& other) noexcept;

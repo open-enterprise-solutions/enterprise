@@ -867,7 +867,7 @@ TEST(CompileTree, AnExportedFunctionIsMarkedCrossBcVisible) {
 		// The access modifier goes AFTER the signature on a callable — a leading
 		// `Public Function …` is not read at all (CompileModule's declaration loop
 		// breaks on the keyword and the body reader meets it as a statement).
-		wxT("Function Shared() Public\n  Return 1;\nEndFunction\n")
+		wxT("Function Visible() Public\n  Return 1;\nEndFunction\n")
 		wxT("Function Private_()\n  Return 1;\nEndFunction\n")));
 
 	const ibByteCode& bc = compiler.m_cByteCode;

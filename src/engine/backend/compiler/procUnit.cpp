@@ -194,7 +194,6 @@ IB_NOINLINE void RaiseText(const char* text, Args&&... args)
 // catalog. The sweep reads it by name (--keyword=RuntimeError, localization.md), as it reads `_`.
 #define RuntimeError(text, ...) RaiseText(ibTRANSLATE(text), ##__VA_ARGS__)
 
-
 IB_FORCEINLINE ibValue& ResolveWrite(int slot, int idx,
 							  ibValue** pRefLocVars,
 							  ibRunContext** ppArrayContext,
@@ -1841,6 +1840,14 @@ start_label:
 				}
 				break;
 			}
+			// ⭐⭐ THE BLOCK'S `lock`, before its loop reads a row — see OPER_LINQ_LOCK in codeDef.h and ibLinqLock.
+			// Not an offer: a source that cannot be held refuses, and so does the source itself when the where
+			// says no key. p3 = 0: the block wrote no `lock`, the place stays empty.
+			case OPER_LINQ_LOCK:
+				if (curCode.m_param3.m_numIndex != 0)
+					ibLinqLock(variable1, *m_pByteCode, (long)index2, (long)curCode.m_param2.m_numArray,
+						curCode.m_param4, curCode.m_param3.m_numIndex == 2, pContext);
+				break;
 
 			// ⭐⭐ WHAT A COMPILED PIPELINE DOES TO ITS OWN COLLECTION — see codeDef.h for the operands
 			// and procUnitLINQ.cpp for why that collection is not a script Array. Three instructions

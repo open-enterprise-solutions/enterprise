@@ -476,10 +476,6 @@ struct ibQuerySelect
 	// only the author of a list / a choice form / a composite-type report knows the quiet form is honest
 	// here. (docs/private/query-constructor.md §5 — ALLOWED.)
 	bool                           m_allowed = false;
-	// FOR UPDATE — this SELECT does not merely read, it HOLDS the rows it returned until the transaction
-	// ends. Rendered by the driver dialect (m_rowLockSuffix: FOR UPDATE / WITH LOCK); reaches it as
-	// ibReadPageRequest::m_lockForUpdate. The read-then-write pair inside one transaction is what it buys.
-	bool                           m_forUpdate = false;
 	// INTO <name> — MATERIALISE this result under a name instead of returning it. The statement then
 	// yields a ROW COUNT (there is no table to hand back — it went into the temp), and later statements
 	// of the same package select FROM that name. Empty = an ordinary select. (docs §5 — query batch.)
@@ -551,6 +547,38 @@ struct ibQuerySelect
 using ibQuerySelectPtr = std::shared_ptr<ibQuerySelect>;
 
 // ==========================================================================
+// ⭐⭐ LOCK — THE PACKAGE'S FIFTH OPERATOR (Max, 2026-11-26): INTO makes, DROP releases, ONTO names, LINK relates,
+// LOCK holds — and UNLOCK lets go of what it held by name.
+//
+//     LOCK [SHARED] [<name>] FROM <table | its virtual table(…)> [AS a] { JOIN <table> [AS b] ON … } [WHERE …]
+//     UNLOCK <name>
+//
+// The name is not ONTO's: ONTO names a select's RESULT, and a lock returns none; and FROM, not ON, stands before the
+// tables, as a select's — ON is a join's (Max, 2026-11-26).
+//
+// It holds VALUES of every table it names — the fields its WHERE and ON tie to a value — until the transaction ends
+// (with a TempDataManager: while the manager holds it), or, named, until an UNLOCK of that name. A step like LINK: it
+// takes its locks where it stands, and what the package
+// reads after it is read under it. A lock is the query's own semantics, never an object written beside the query:
+// such an object said the table and the fields a second time, and the two drifted apart without a word.
+//
+// It replaced `FOR UPDATE`, which held the rows a select RETURNED — not a balance (an aggregate), not a row that is
+// not there yet — and was a second way to say "lock". docs/private/record-locks.md says which records it holds.
+// ==========================================================================
+enum class ibQueryLockModeAst { Exclusive, Shared };
+
+struct ibQueryAstLock
+{
+	ibQueryLockModeAst          m_mode = ibQueryLockModeAst::Exclusive;
+	// WHAT IT HOLDS, written as a query's FROM, JOIN and WHERE — and nothing else of a query: the first table (a virtual
+	// table holds its table), every table joined to it, and the condition, any a query's WHERE is (`field = value` and
+	// `IN` key the values, the rest narrows nothing; null = the whole tables). A select, so the query constructor's Tables, Links and Conditions tabs edit it and its names are
+	// checked as a select's (Max, 2026-11-26: a LOCK allows joins and conditions, not fields, groups, order or totals).
+	ibQuerySelectPtr            m_select;
+	ibString                    m_name;    // LOCK <name> FROM — what an UNLOCK lets it go by; empty = held to its holder's end
+};
+
+// ==========================================================================
 // A PACKAGE — several statements written together, sent in ONE trip and answered by an ARRAY of
 // results addressed by position (docs/private/query-constructor.md §5 — query batch). Three properties make
 // it more than a transport saving:
@@ -561,14 +589,20 @@ using ibQuerySelectPtr = std::shared_ptr<ibQuerySelect>;
 //   * the returned array is HETEROGENEOUS by position: a plain select yields its table, a
 //     select-into-temp yields the row count.
 //
-// A statement is EITHER a select (possibly INTO a temp table) OR a drop of one. The drop exists
-// because a package's temp tables live for the WHOLE package: releasing early inside a long package
-// has to be sayable out loud rather than left to scope.
+// A statement is a select (possibly INTO a temp table), a drop, a link, a lock or an unlock. The drop
+// exists because a package's temp tables live for the WHOLE package: releasing early inside a long
+// package has to be sayable out loud rather than left to scope — and the unlock says the same of a lock.
 // ==========================================================================
 struct ibQueryAstStatement
 {
 	ibQuerySelectPtr m_select;     // the SELECT (null on a drop statement)
 	ibString         m_dropTemp;   // DROP <name> — release a temp table early (empty on a select)
+
+	// …OR A LOCK, a step like LINK (ibQueryAstLock): it holds what it names where it stands.
+	std::shared_ptr<ibQueryAstLock> m_lock;
+	// …OR AN UNLOCK — let go of a lock a LOCK named (`LOCK <name> FROM`) now: this package's, or one a TempDataManager holds
+	// for an earlier query. Its own word: DROP reads as a table's (Max, 2026-11-26).
+	ibString         m_unlock;
 
 	// ⭐⭐ …OR A LINK, WHICH IS A STEP LIKE THE OTHER TWO. `LINK A INNER JOIN B ON …` RECONCILES two
 	// named selections that already ran: rows on either side that found no partner are dropped, and
@@ -587,6 +621,8 @@ struct ibQueryAstStatement
 
 	bool IsDrop() const { return !m_dropTemp.IsEmpty(); }
 	bool IsLink() const { return m_linkIndex >= 0; }
+	bool IsLock() const { return m_lock != nullptr; }
+	bool IsUnlock() const { return !m_unlock.IsEmpty(); }
 };
 
 // ⭐⭐ A LINK BETWEEN TWO NAMED RESULTS — and it belongs to the PACKAGE, not to any statement in it.

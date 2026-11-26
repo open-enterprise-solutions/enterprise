@@ -49,12 +49,10 @@
 // the leader-election primitive — see kLockSentinelOffset below.
 
 #include "backend/backend.h"
+#include "core/sharedFile.h"   // the sidecar and its sentinel byte — the base's lock file stands on the same
 
 #include <cstdint>
-
-#ifdef __IBMSW__
-#include <windows.h>
-#endif
+#include <memory>
 
 class BACKEND_API ibFirebirdLease {
 public:
@@ -123,7 +121,7 @@ public:
 	void Release();
 
 	// True iff this instance currently holds the lock.
-	bool HoldsLock() const { return m_holdsLock; }
+	bool HoldsLock() const { return m_lock.HoldsByte(); }
 
 	// Heartbeat staleness threshold — a leader that hasn't updated
 	// the heartbeat in this long is considered dead even if the
@@ -148,13 +146,10 @@ public:
 private:
 	ibString m_dbPath;
 	ibString m_leasePath;
-	bool     m_holdsLock = false;
 
-#ifdef __IBMSW__
-	HANDLE   m_hFile = INVALID_HANDLE_VALUE;
-#else
-	int      m_fd = -1;
-#endif
+	// The file while its sentinel is held — a follower keeps neither — and the byte; the file first, outliving its byte.
+	std::unique_ptr<ibSharedFile> m_file;
+	ibFileByteLock                m_lock;
 };
 
 #endif // __FIREBIRD_LEASE_H__

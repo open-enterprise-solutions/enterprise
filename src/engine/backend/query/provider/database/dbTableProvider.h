@@ -69,6 +69,11 @@ public:
 	virtual size_t ParametersOneStatementTakes() const override;
 
 	virtual long ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind) override;
+	// The base's lock manager holds them, in the namespace of the metaobject behind the source; a base whose
+	// transaction is the lock (SQLite) holds them by its open transaction. (dbTableProvider.cpp)
+	virtual std::shared_ptr<void> ExecuteLock(const ibDataQuerySpec& spec, const std::vector<struct ibLockItem>& keys) override;
+	// A source with a metaobject behind it — the namespace its locks live in.
+	virtual bool CanLock(const std::shared_ptr<const ibBackendQueryable>& queryable) const override;
 
 	// Reference dot-walk target resolution — THIS is the ONE metadata-owning provider (clsid ->
 	// metaData->GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData()). The base's

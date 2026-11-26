@@ -93,50 +93,10 @@ void ibApplicationInstance::CreateTableEvent()
 	}
 }
 
-// sys_lock — long-held pessimistic-lock coordination table (see
-// docs/private/record-locks.md "Planned upgrade path"). One row per held
-// lock. ibLockManager INSERTs on Acquire, DELETEs on Release / on
-// session end / on zombie sweep. Index on (namespace, keyHash) drives
-// the per-acquire conflict-check; index on sessionGuid drives the
-// session-end cascade.
-//
-// sys_lock_key is the mutex for one key. It is created on every open, including a
-// base that already has sys_lock: the first acquire of a key inserts the header
-// under the primary key, so nothing is copied out of the old rows. The sweep
-// deletes a header once nobody holds the key. An old binary on the same base
-// still acquires without the row, so two processes can both be granted the key
-// until every process is upgraded.
-void ibApplicationInstance::CreateTableLock()
-{
-	ibDatabaseQueryBuilder q;
-	if (!q.TableExists(lock_table)) {
-		q.Execute(ibCreateTable(lock_table, {
-			{ ibT("lockGuid"),    ibTypeString(36),   false, true,  nullptr },
-			{ ibT("sessionGuid"), ibTypeString(36),   true,  false, nullptr },   // owner identity (session.GUID or custom holder)
-			{ ibT("namespace"),   ibTypeString(128),  true,  false, nullptr },   // e.g. "Catalog.Products"
-			{ ibT("keyHash"),     ibTypeString(64),   true,  false, nullptr },   // SHA-256 hex of canonical key bytes
-			{ ibT("keyData"),     ibTypeString(1024), false, false, nullptr },   // canonical human-readable key for conflict messages
-			{ ibT("lockMode"),    ibTypeInteger(),    true,  false, nullptr },   // 0=Shared, 1=Exclusive
-			{ ibT("acquiredAt"),  ibTypeDate(),       true,  false, nullptr },
-			{ ibT("userName"),    ibTypeString(128),  false, false, nullptr },   // holder's display name (snapshot at acquire)
-			{ ibT("computer"),    ibTypeString(128),  false, false, nullptr },
-		}));
-		// Index on (namespace, keyHash) drives the per-acquire conflict-check; index on
-		// sessionGuid drives the session-end cascade. No per-driver fork — see CreateTableSession.
-		q.Execute(ibCreateIndex(lock_table, ibT("lock_index_1"), { ibT("namespace"), ibT("keyHash") }));
-		q.Execute(ibCreateIndex(lock_table, ibT("lock_index_2"), { ibT("sessionGuid") }));
-		// The header outlives the lock. Release does not delete it.
-		q.Execute(ibCreateTable(lock_key_table, {
-			{ ibT("namespace"), ibTypeString(128), true, true, nullptr },
-			{ ibT("keyHash"),   ibTypeString(64),  true, true, nullptr },
-		}));
-	}
-}
-
 // sys_job — the SHARED clock for scheduled jobs. One row per job name,
 // carrying when it last ran as every process on this base sees it.
 //
-// Why it exists: the cross-process claim (sys_lock, Job.<name>) answers
+// Why it exists: the cross-process claim (the lock file, Job.<name>) answers
 // "is somebody running it RIGHT NOW", which is not the same question as
 // "has it already run recently". Without a shared last-run, two clients
 // open on one file base each keep their own in-memory clock and the job
@@ -188,9 +148,8 @@ void ibApplicationInstance::CreateTableJob()
 //
 // ⚠ THE PRIMARY KEY IS A HASH OF THE ADDRESS, not the address itself, and that is a fact
 // about the DDL renderer rather than about settings: PRIMARY KEY is spelled per COLUMN, so
-// four key columns would emit four of them and no driver would take the CREATE. sys_lock
-// answered the same question the same way — keyHash for the lookup, the readable parts
-// beside it. Here they also carry the "everything this user saved for that object" query,
+// four key columns would emit four of them and no driver would take the CREATE — keyHash for the lookup, the readable parts
+// beside it. They also carry the "everything this user saved for that object" query,
 // which is what the index is for.
 //
 // The payload's format is NOT this table's business: binaryData is a NODE written through
@@ -237,7 +196,7 @@ void ibApplicationInstance::CreateTableSettings()
 // through without being held whole anywhere.
 //
 // The key is the part's address, file + number, in ONE column — PRIMARY KEY is spelled per column (see
-// sys_settings above); the two halves stand beside it for the reads. The owner is on every part, as sys_lock
+// sys_settings above); the two halves stand beside it for the reads. The owner is on every part, as the lock file
 // carries it on every lock: the session-end cascade and the sweep delete by it.
 //
 // Nothing here outlives its session, so a schema change may drop and rebuild it.

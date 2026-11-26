@@ -5,7 +5,7 @@
 #include "linqConstructor.h"
 
 #include "core/compiler/translateCode.h"     // GetKeyWord - the words are the lexer's
-#include "core/compiler/codeDef.h"           // KEY_FROM ... KEY_RESTRICT
+#include "core/compiler/codeDef.h"           // KEY_FROM ... KEY_SHARED
 #include "core/stringUtils.h"
 #include "frmclient/backend/compiler/value.h"   // ibValue::GetIconGroup - a field's picture
 #include "deskgui/artProvider.h"   // wxART_FRONTEND and the product's own pictures
@@ -159,7 +159,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	// order the pages are added below, which is also each page's picture index.
 	{
 		wxWithImages::Images pictures;
-		for (const wxString id : { wxART_TABLE, wxART_FILTER, wxART_GROUPING, wxART_SORT, wxART_ADVANCED })
+		for (const wxString id : { wxART_TABLE, wxART_FILTER, wxART_GROUPING, wxART_SORT, wxART_ADVANCED, wxART_DATA_LOCK })
 			pictures.push_back(wxArtProvider::GetBitmapBundle(id, wxART_FRONTEND, wxSize(16, 16)));   // normal DPI, no FromDIP
 		m_notebook->SetImages(pictures);
 	}
@@ -473,6 +473,44 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_pageTrees.push_back(nullptr);
 	}
 
+	// ---- Data lock: the block's `Lock [Shared]`, keyed by the `Where` written right before it (record-locks.md) ----
+	{
+		ibPanel* page = new ibPanel(m_notebook);
+		ibStaticBoxSizer* holding = new ibStaticBoxSizer(wxVERTICAL, page, _("Data lock"));
+		wxWindow* box = holding->GetStaticBox();
+
+		m_lock = new ibCheckBox(box, wxID_ANY,
+			ibString::Format(_("%s - hold the rows of the source before the first of them is read"), Word(KEY_LOCK)));
+		holding->Add(m_lock, wxSizerFlags().Border(wxALL, gap / 2));
+		m_lockShared = new ibCheckBox(box, wxID_ANY,
+			ibString::Format(_("%s - other sessions may hold them too, to read; one that writes waits"), Word(KEY_SHARED)));
+		m_lockShared->Disable();
+		holding->Add(m_lockShared, wxSizerFlags().Border(wxALL, gap / 2));
+
+		wxBoxSizer* keyRow = new wxBoxSizer(wxHORIZONTAL);
+		keyRow->Add(new ibStaticText(box, wxID_ANY, _("Key:")), wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
+		m_lockKey = new ibTextCtrl(box, wxID_ANY);
+		m_lockKey->Disable();
+		keyRow->Add(m_lockKey, wxSizerFlags(1).CenterVertical());
+		holding->Add(keyRow, wxSizerFlags().Expand().Border(wxALL, gap / 2));
+
+		// WHAT IS HELD, said where it is chosen: the key is the one condition the compiler keys the lock by.
+		ibStaticText* said = new ibStaticText(box, wxID_ANY, ibString::Format(
+			_("The key is written as the '%s' right before the lock: a field equal to a value, several joined by 'and'; "
+			  "empty - the whole source. The conditions of the Conditions tab are written after it and only filter. "
+			  "A lock holds the query's one source - not beside a join or a second '%s' - until the transaction ends."),
+			Word(KEY_WHERE), Word(KEY_FROM)));
+		said->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		said->Wrap(FromDIP(640));
+		holding->Add(said, wxSizerFlags().Border(wxALL, gap / 2));
+
+		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+		sizer->Add(holding, wxSizerFlags().Expand().Border(wxALL, gap * 2));
+		page->SetSizer(sizer);
+		m_notebook->AddPage(page, _("Data lock"), false, 5);
+		m_pageTrees.push_back(nullptr);
+	}
+
 	top->Add(m_notebook, wxSizerFlags(1).Expand().Border(wxALL, gap));
 
 	// HOW IT IS USED, said once: the tree on the left is what can be read, and everything moves out of it
@@ -504,6 +542,15 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	m_groupInto->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { ShowBlock(); });
 	m_groupInto->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) { ShowResult(); event.Skip(); });
 	m_distinct->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ShowResult(); });
+	// The lock: its way and its key are asked only of a lock; the key is typed as the group's name is.
+	m_lock->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		m_lockShared->Enable(m_lock->IsChecked());
+		m_lockKey->Enable(m_lock->IsChecked());
+		ShowResult();
+	});
+	m_lockShared->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ShowResult(); });
+	m_lockKey->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { ShowBlock(); });
+	m_lockKey->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) { ShowResult(); event.Skip(); });
 	Bind(wxEVT_BUTTON, &ibDialogLinqConstructor::OnOk, this, wxID_OK);
 
 	SetSizerAndFit(top);
@@ -1203,6 +1250,11 @@ void ibDialogLinqConstructor::Open(const ibLinqBlock& block)
 	OpenCount(m_skipCount, block.m_skip);
 	OpenCount(m_takeCount, block.m_take);
 	m_distinct->SetValue(block.m_distinct);
+	m_lock->SetValue(block.m_lock);
+	m_lockShared->SetValue(block.m_lockShared);
+	m_lockShared->Enable(block.m_lock);
+	m_lockKey->ChangeValue(block.m_lockKey);
+	m_lockKey->Enable(block.m_lock);
 }
 
 ibLinqBlock ibDialogLinqConstructor::Collect() const
@@ -1255,6 +1307,11 @@ ibLinqBlock ibDialogLinqConstructor::Collect() const
 	block.m_skip      = CountText(m_skipCount);
 	block.m_take      = CountText(m_takeCount);
 	block.m_distinct  = m_distinct->IsChecked();
+	block.m_lock      = m_lock->IsChecked();
+	if (block.m_lock) {   // a way and a key belong to a lock; with none they say nothing
+		block.m_lockShared = m_lockShared->IsChecked();
+		block.m_lockKey    = wxString(m_lockKey->GetValue()).Trim(true).Trim(false);
+	}
 	return block;
 }
 

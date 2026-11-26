@@ -48,12 +48,13 @@
 #include <cwctype>       // std::iswdigit, std::towlower… — a character's class and case
 #include <iosfwd>        // std::ostream — operator<<
 #include <string>
-#include <string_view>   // std::hash<ibString> hashes a view of the buffer
+#include <string_view>
 #include <tuple>         // std::apply — ibString::Format holds its arguments for the call
 #include <type_traits>
 #include <utility>       // std::declval — what Format holds a text as
 
 #include "core/coreApi.h"   // CORE_API, ibChar, ibT
+#include "core/hash.h"      // the mixer — GetHash
 
 // wx's string and what a Format argument of it can be — named, not included: the boundary's templates are made only
 // where a program includes wx itself.
@@ -372,6 +373,14 @@ public:
 	}
 	CORE_API int  CmpNoCase(const ibString& o) const;
 	CORE_API bool IsAscii() const noexcept;
+	// THE TEXT'S HASH — by its characters, the ones operator== compares (core/hash.h): a key of an unordered
+	// container, a value's hash and a lock key read this one.
+	std::uint64_t GetHash() const noexcept {
+		std::uint64_t h = kIbHashBasis;
+		for (const ibChar ch : View())
+			h = ibHashCombine(h, ch);
+		return h;
+	}
 
 	// --- wx spellings of the conversions above ---
 	std::string  ToStdString()  const { return ToUtf8(); }   // UTF-8: the core has no other narrow encoding
@@ -457,11 +466,11 @@ inline ibString operator+(const ibChar* a, const S& b) { ibString r(a); r += b; 
 template <std::same_as<wxString> S>
 inline bool operator==(const S& a, const ibChar* b) { return ibString(a) == b; }
 
-// A key of an unordered container, as wxString is one — by its characters.
+// A key of an unordered container, as wxString is one — by its characters (GetHash).
 namespace std {
 template <> struct hash<ibString> {
 	size_t operator()(const ibString& s) const noexcept {
-		return std::hash<std::u16string_view>()(std::u16string_view(s.c_str(), s.Len()));
+		return static_cast<size_t>(s.GetHash());
 	}
 };
 }

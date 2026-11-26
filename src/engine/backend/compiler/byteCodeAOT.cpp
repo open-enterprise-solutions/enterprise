@@ -262,6 +262,9 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // 🛑 38 -> 39 (2026-11-19): OPER_LINQ_WINDOW joined the opcode list after OPER_LINQ_KEEP — an ordered query's
 //    `skip` / `take` are kept in its collection and cut after the order, where a v38 blob counts them as the rows
 //    arrive and so takes the first rows READ. Every opcode after OPER_LINQ_KEEP moves by one, TYPE_DELTA with them.
+// 🛑 39 -> 40 (2026-11-26): OPER_LINQ_LOCK joined the opcode list after OPER_LINQ_NARROW — a block's `lock`, whose
+//    place stands before the outermost loop of every block, filled in when the query says `lock`. Every opcode after
+//    OPER_LINQ_NARROW moves by one, TYPE_DELTA with them, and a v39 block has no such place.
 // The constant itself is kAOTFormatVersion in byteCodeFormat.h. It moved out of this
 // file so the cache key can name the same number the blob header writes.
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet

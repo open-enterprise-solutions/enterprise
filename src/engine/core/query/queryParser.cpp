@@ -354,8 +354,9 @@ std::vector<ibQueryPackageLink> ibQueryParser::ParsePackageLinks()
 	return links;
 }
 
-// One statement of a package. DROP releases a temp table the package made earlier; anything
-// else is a SELECT (which may itself materialise INTO a temp table).
+// One statement of a package. DROP releases a temp table the package made earlier; LOCK holds values of
+// tables and UNLOCK lets go of a named one; anything else is a SELECT (which may itself materialise INTO a
+// temp table).
 ibQueryAstStatement ibQueryParser::ParseStatement()
 {
 	ibQueryAstStatement statement;
@@ -367,8 +368,63 @@ ibQueryAstStatement ibQueryParser::ParseStatement()
 		return statement;
 	}
 
+	if (AcceptKw(ibQueryKeyword::Lock)) {
+		statement.m_lock = ParseLock();
+		return statement;
+	}
+
+	if (AcceptKw(ibQueryKeyword::Unlock)) {
+		if (Cur().m_kind != ibQueryTokenKind::Ident)
+			ThrowQueryException(Cur(), _("expected after UNLOCK the name a LOCK was given: LOCK <name> FROM <table>"));
+		statement.m_unlock = Next().m_text;
+		return statement;
+	}
+
 	statement.m_select = ParseSelectStatement();
 	return statement;
+}
+
+// ⭐⭐ LOCK [SHARED] [name] FROM <table> [AS a] { join } [WHERE predicate] — the package's fifth operator
+// (ibQueryAstLock). It is read as a select's FROM and WHERE are, because it says the same things: which tables,
+// how they meet, which rows. What it holds is the lowering's to work out of them.
+std::shared_ptr<ibQueryAstLock> ibQueryParser::ParseLock()
+{
+	auto lock = std::make_shared<ibQueryAstLock>();
+	lock->m_select = std::make_shared<ibQuerySelect>();
+	ibQuerySelect& held = *lock->m_select;
+
+	if (AcceptKw(ibQueryKeyword::Shared))
+		lock->m_mode = ibQueryLockModeAst::Shared;
+
+	// `<name>` — what an UNLOCK lets it go by — and FROM before the tables, as a select names them: one word keeps one
+	// meaning, so ON stays a join's (Max, 2026-11-26), and nothing has to tell a name from a table. (Not ONTO: that
+	// names a select's RESULT, which a lock has none of.)
+	if (Cur().m_kind == ibQueryTokenKind::Ident)
+		lock->m_name = Next().m_text;
+	if (!AcceptKw(ibQueryKeyword::From))
+		ThrowQueryException(Cur(), _("expected FROM before the tables a LOCK holds: LOCK [SHARED] [<name>] FROM <table>"));
+
+	held.m_from = ParseSource();
+	ParseJoins(held);
+
+	// A LOCK HOLDS TABLES OF THE BASE. A nested query or a table handed in is rows somebody already has —
+	// there is nothing in the base for another session to be kept out of.
+	const auto refuseRows = [this](const ibQuerySource& source) {
+		if (source.m_subquery == nullptr && !source.m_parameter)
+			return;
+		ibQueryToken at;
+		at.m_line = source.m_line;
+		at.m_col  = source.m_col;
+		ThrowQueryException(at, _("LOCK holds tables of the base: a nested query or a table handed in holds no rows of it"));
+	};
+	refuseRows(held.m_from);
+	for (const ibQueryAstJoin& join : held.m_joins)
+		refuseRows(join.m_source);
+
+	if (AcceptKw(ibQueryKeyword::Where))
+		held.m_where = ParsePredicate();
+
+	return lock;
 }
 
 // One SELECT BODY up to HAVING (no ORDER / TOTALS) — a single branch of a (possible) UNION.
@@ -518,13 +574,6 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 	// to be refused outside `INTO`, so that a value table read by several statements was put away once;
 	// that stays the author's choice to make, and the text still says it: `SELECT * INTO Goods FROM &Goods`.
 
-	// FOR UPDATE — last, because it qualifies the whole statement: the rows this select
-	// returned are HELD until the transaction ends.
-	if (AcceptKw(ibQueryKeyword::For)) {
-		ExpectKw(ibQueryKeyword::Update, ibT("UPDATE after FOR"));
-		sel->m_forUpdate = true;
-	}
-
 	return sel;
 }
 
@@ -635,13 +684,11 @@ ibQuerySource ibQueryParser::ParseSource()
 		++m_pos;                                   // '('
 		s.m_subquery = ParseSelectStatement();
 		ExpectPunct(ibT(')'), ibT("')' after a subquery"));
-		// A NESTED QUERY IS NOT A STATEMENT. INTO materialises a package's temp table and FOR
-		// UPDATE holds a statement's rows — inside a source both are silent no-ops, and a silent
-		// no-op in a query someone wrote deliberately is worse than a refusal.
+		// A NESTED QUERY IS NOT A STATEMENT. INTO materialises a package's temp table — inside a source
+		// it is a silent no-op, and a silent no-op in a query someone wrote deliberately is worse than
+		// a refusal.
 		if (!s.m_subquery->m_intoTemp.IsEmpty())
 			ThrowQueryException(at, _("INTO belongs to a statement of a query package, not to a nested table"));
-		if (s.m_subquery->m_forUpdate)
-			ThrowQueryException(at, _("FOR UPDATE belongs to a statement, not to a nested table"));
 		// ⭐ AND NEITHER TOTALS NOR ORDER BY BELONG TO A NESTED TABLE (Max). Totals are how a RESULT
 		// is presented — a nested table is not a result, it is a source. An order inside a derived
 		// table is promised by nothing in SQL and read by nobody; worse, writing one used to keep the

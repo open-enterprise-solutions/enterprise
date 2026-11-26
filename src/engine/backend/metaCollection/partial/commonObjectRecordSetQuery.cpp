@@ -37,6 +37,11 @@ static std::vector<ibValueMetaObjectAttributeBase*> ibInIdOrder(std::vector<ibVa
 	return attributes;
 }
 
+void ibValueRecordSetObject::Read()
+{
+	ReadData();   // LockForUpdate outside a transaction: refused by the provider that would hold it (ibHoldRead)
+}
+
 bool ibValueRecordSetObject::LockByKeys()
 {
 	if (m_metaObject == nullptr || m_keyValues.empty())
@@ -252,6 +257,11 @@ bool ibValueRecordSetObject::ReadData()
 				continue;
 			ibRegWhereKeyValue(q, m_metaObject, object, m_keyValues.at(object->GetMetaID()));
 		}
+		// ⭐ THE SET IS READ UNDER ITS KEY — shared, so a writer of the set waits for the transaction while other
+		// readers read; LockForUpdate holds it exclusive, so read, change and write are one stretch nobody writes into
+		// (docs/private/record-locks.md, stage 12). Whether and how it is held is the provider's: in a transaction on
+		// its connection, and nothing outside one.
+		q.WithLock(m_lockForUpdate ? ibLockMode::Exclusive : ibLockMode::Shared);
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching line
 		ibDataQueryResult selection = q.Execute(page);
@@ -267,6 +277,8 @@ bool ibValueRecordSetObject::ReadData()
 			m_selected = ibSelection::Selected;
 		}
 	}
+	catch (const ibBackendLockException&) { throw; }   // a set somebody holds is said so, not read as an empty one
+	catch (const ibBackendCoreException&) { throw; }   // …and a read refused (LockForUpdate outside a transaction)
 	catch (...) { return false; }
 
 	return GetRowCount() > 0;
@@ -368,7 +380,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		// source. Batching this needs a MERGE the L2 IR does not carry yet.
 		for (long row = 0; row < GetRowCount() && !hasError; row++) {
 			ibDataQueryBuilder q;
-			q.From(m_metaObject->GetQueryable());
+			q.From(m_metaObject->GetQueryable()).WithLock(ibLockMode::Exclusive);   // the line held — stage 9
 			stageRow(q, row);
 			hasError = !q.Upsert();
 		}
@@ -379,8 +391,11 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		// is stored — so the write is a plain INSERT, and the door stages every line before the provider emits it.
 		// A thousand lines cost a thousand statements and a thousand round trips before this. A set rewritten
 		// under `replace` is therefore asked what a create is asked — the same right (Modify) as a rewrite.
+		// ⭐ A WRITE HOLDS WHAT IT WRITES (docs/private/record-locks.md, stage 9) — each line, exclusive, until the
+		// transaction ends, so a reader's `LOCK SHARED … WHERE Product = &P` stops the write of that product and not of
+		// another; past a thousand lines, what they all share (the recorder). How it is held is the provider's.
 		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
+		q.From(m_metaObject->GetQueryable()).WithLock(ibLockMode::Exclusive);
 		for (long row = 0; row < GetRowCount(); row++) {
 			if (row > 0) q.NextRow();
 			stageRow(q, row);
@@ -416,7 +431,7 @@ bool ibValueRecordSetObject::DeleteData()
 	// m_keyValues (recorder / period + dimensions) = value, through the L3 write door. It
 	// expands each column to its physical fields and binds. No fields, no positions here.
 	ibDataQueryBuilder q;
-	q.From(m_metaObject->GetQueryable());
+	q.From(m_metaObject->GetQueryable()).WithLock(ibLockMode::Exclusive);   // the lines it deletes held — stage 9
 
 	bool keyed = false;
 	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {

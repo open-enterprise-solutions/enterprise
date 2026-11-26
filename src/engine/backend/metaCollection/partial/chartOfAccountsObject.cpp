@@ -187,8 +187,8 @@ void ibValueRecordDataObjectChartOfAccounts::FillMethods(ibMemberTable& helper) 
 bool ibValueRecordDataObjectChartOfAccounts::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectChartOfAccounts::FillMethods)) {
-	case Func::enLock:   TryAcquireFormLock(); return true;
-	case Func::enUnlock: ReleaseFormLock();    return true;
+	case Func::enLock:   TryLock(); return true;
+	case Func::enUnlock: Unlock();  return true;
 	}
 	return ibValueRecordDataObjectHierarchyRef::CallAsProc(lMethodNum, paParams, lSizeArray);
 }

@@ -326,7 +326,7 @@ bool ibValueRecordManagerObjectInformationRegister::GetPropVal(const long lPropN
 
 bool ibValueRecordSetObjectInformationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	return false;
+	return ibValueRecordSetObject::SetPropVal(lPropNum, varPropVal);   // the set's own (LockForUpdate) — the base's
 }
 
 bool ibValueRecordSetObjectInformationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

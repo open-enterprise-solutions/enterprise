@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <memory>
 
 #include "backend/backend_exception.h"
@@ -20,6 +21,9 @@
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/procUnitLambda.h"   // ibValueFunction — what a lambda took, read off it
 #include "backend/compiler/byteCode.h"
+#include "backend/compiler/lambdaQueryAST.h"   // ibBuildQueryAstFromRange — the key a block's lock reads off its where
+#include "core/query/queryAST.h"               // ibQueryAstExpr — what that key reads as
+#include "core/compiler/codeDef.h"             // OPER_LINQ_LOCK — the block's lock, found in its bytecode
 #include "backend/compiler/value.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
@@ -1233,6 +1237,72 @@ TEST(RuntimeTest, LinqClauseAfterAnUnnamedGroup_IsRefusedByName) {
 	ibCompileCode terminal(wxT("test"), wxT("memory"), false);
 	EXPECT_TRUE(TryCompileNamed(terminal, head + wxT("  q = from r in rows group r by r;\n") + tail, why))
 		<< why.ToStdString();
+}
+
+// ===========================================================================
+// `lock` HOLDS THE BLOCK'S ONE SOURCE, keyed by the `where` right before it (docs/private/record-locks.md). It
+// compiles after the source or a where, shared or not; beside a join or a second from, or after a where that is
+// not the one right before it, it is refused by name when the module compiles - not found out when it runs.
+// ===========================================================================
+
+TEST(RuntimeTest, LinqLock_IsKeyedByTheWhereRightBeforeIt) {
+	const ibString head =
+		ibT("Function Locked(p) Public\n")
+		ibT("  var rows; var other; var q;\n")
+		ibT("  rows = New Array; other = New Array;\n");
+	const ibString tail =
+		ibT("  Return q.Count();\n")
+		ibT("EndFunction\n");
+	const auto compiles = [&head, &tail](const ibString& query, ibString& why) {
+		ibCompileCode code(ibT("test"), ibT("memory"), false);
+		return TryCompileNamed(code, head + ibT("  q = ") + query + ibT(";\n") + tail, why);
+	};
+
+	ibString why;
+	EXPECT_TRUE(compiles(ibT("from r in rows where r.A = p lock select r"), why)) << why.ToStdString();
+	EXPECT_TRUE(compiles(ibT("from r in rows where r.A = p lock shared where r.B > 0 select r"), why)) << why.ToStdString();
+	EXPECT_TRUE(compiles(ibT("from r in rows lock select r"), why)) << why.ToStdString();
+
+	EXPECT_FALSE(compiles(ibT("from r in rows join o in other on r.A equals o.A lock select r"), why));
+	EXPECT_TRUE(why.Contains(ibT("one source"))) << why.ToStdString();
+	EXPECT_FALSE(compiles(ibT("from r in rows from o in other lock select r"), why));
+	EXPECT_TRUE(why.Contains(ibT("one source"))) << why.ToStdString();
+	EXPECT_FALSE(compiles(ibT("from r in rows where r.A = p where r.B = p lock select r"), why));
+	EXPECT_TRUE(why.Contains(ibT("right before it"))) << why.ToStdString();
+	EXPECT_FALSE(compiles(ibT("from r in rows where r.A = p orderby r.B lock select r"), why));
+	EXPECT_TRUE(why.Contains(ibT("right before it"))) << why.ToStdString();
+}
+
+// The key is READ off the where's instructions (ibBuildQueryAstFromRange), and the range BEGINS with one of them — the
+// read of the row's field. The reader looked from the instruction after the first, as a lambda's body is read past its
+// OPER_LFUNC, so `r.A` came back as the cell it lands in, and a live base refused the lock "says none of them"
+// (2026-11-26).
+TEST(RuntimeTest, LinqLock_ReadsTheFieldItsWhereBeginsWith) {
+	ibCompileCode code(ibT("test"), ibT("memory"), false);
+	ibString why;
+	ASSERT_TRUE(TryCompileNamed(code,
+		ibT("Function Locked(p) Public\n")
+		ibT("  var rows; var q;\n")
+		ibT("  rows = New Array;\n")
+		ibT("  q = from r in rows where r.A = p lock select r;\n")
+		ibT("  Return q.Count();\n")
+		ibT("EndFunction\n"), why)) << why.ToStdString();
+
+	const ibByteCode& bc = code.m_cByteCode;
+	const auto lock = std::find_if(bc.m_listCode.begin(), bc.m_listCode.end(), [](const ibByteUnit& c) {
+		return c.m_numOper == OPER_LINQ_LOCK && c.m_param3.m_numIndex != 0;
+	});
+	ASSERT_NE(lock, bc.m_listCode.end()) << "the block's lock filled in its place";
+	const long from = (long)lock->m_param2.m_numIndex;
+	const long to   = (long)lock->m_param2.m_numArray;
+	ASSERT_LT(from, to) << "keyed by its where";
+
+	ibString refused;
+	const std::shared_ptr<ibQueryAstExpr> key =
+		ibBuildQueryAstFromRange(bc, from, to, lock->m_param4, bc.m_listCode[(size_t)to].m_param1, &refused);
+	ASSERT_NE(key, nullptr) << refused.ToStdString();
+	ASSERT_NE(key->m_lhs, nullptr) << ibDescribeQueryAst(key).ToStdString();
+	EXPECT_EQ(key->m_lhs->m_kind, ibQueryAstExprKind::Column) << ibDescribeQueryAst(key).ToStdString();
 }
 
 // ===========================================================================

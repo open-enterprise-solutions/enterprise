@@ -337,11 +337,10 @@ bool InnerIsFlattenable(const ibQuerySelect& inner, const ibQuerySelect& outer)
 	// totals push-down could ever fire above it.
 	if (inner.m_top > 0)           FlattenDecline(ibT("the inner query has TOP, whose limit merging would lose"));
 	// The statement words the inner may carry. Merging them away is the SILENT kind of wrong:
-	// ALLOWED would become a refusal the author asked not to have, FOR UPDATE would stop holding
-	// the rows, INTO would stop materialising anything — and the query would still run. (An ALLOWED
-	// the outer says as well is the outer's, handed down — PassAllowedDown — and merging keeps it.)
+	// ALLOWED would become a refusal the author asked not to have, INTO would stop materialising
+	// anything — and the query would still run. (An ALLOWED the outer says as well is the outer's,
+	// handed down — PassAllowedDown — and merging keeps it.)
 	if (inner.m_allowed && !outer.m_allowed) FlattenDecline(ibT("the inner query is SELECT ALLOWED"));
-	if (inner.m_forUpdate)         FlattenDecline(ibT("the inner query is FOR UPDATE"));
 	if (!inner.m_intoTemp.IsEmpty()) FlattenDecline(ibT("the inner query has INTO"));
 	if (inner.m_selectAll) return true;
 	for (const ibQueryProjection& p : inner.m_projections) {
@@ -864,10 +863,8 @@ void ReadRowsOneLevelDown(ibQuerySelect& s)
 	if (lifted.empty() && !computes)
 		return;
 
-	// ⚠ TWO SHAPES STAY WHERE THEY WERE WRITTEN, and the lowering refuses them in its own words: a lock taken by a
-	// nested read is not the lock on the table's rows, and a star would show the carried value beside the fields.
-	if (s.m_forUpdate)
-		LiftDecline(ibT("FOR UPDATE locks the table's own rows, which a nested read does not take"));
+	// ⚠ A STAR STAYS WHERE IT WAS WRITTEN, and the lowering refuses it in its own words: it would show the carried
+	// value beside the fields.
 	if (s.m_selectAll || std::any_of(s.m_projections.begin(), s.m_projections.end(),
 	                                 [](const ibQueryProjection& p) { return p.m_star; }))
 		LiftDecline(ibT("SELECT * would show the value the condition reads beside the fields - name them"));

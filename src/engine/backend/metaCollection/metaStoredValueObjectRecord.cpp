@@ -293,9 +293,9 @@ ibValue ibValueMetaObjectStoredValue::ReadStoredValue() const
 
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
-bool ibValueRecordDataObjectConstant::TryAcquireFormLock(ibLockMode mode)
+bool ibValueRecordDataObjectConstant::TryLock(ibLockMode mode)
 {
-	if (m_formLockHandle.IsValid()) return true;   // already held
+	if (m_lockHandle.IsValid()) return true;   // already held
 
 	// Constant is one row globally — namespace IS the key, no per-row
 	// sub-identifier. ForNamespace encapsulates the empty-keyFields
@@ -303,7 +303,7 @@ bool ibValueRecordDataObjectConstant::TryAcquireFormLock(ibLockMode mode)
 	auto* lm = ibApplicationInstance::GetLockManager();
 	if (lm == nullptr)
 		ibBackendCoreException::Error(_("Lock manager not initialised"));
-	m_formLockHandle = lm->Acquire({
+	m_lockHandle = lm->Acquire({
 		ibLockItem::ForNamespace(m_metaObject->GetDocPath(), mode, m_metaObject->GetSynonym())
 	});
 	return true;

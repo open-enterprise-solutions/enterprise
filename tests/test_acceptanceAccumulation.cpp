@@ -54,7 +54,13 @@
 #include "backend/system/value/valueTable.h"
 #include "backend/system/value/valueQueryable.h"   // ibValueQueryable — a register's readings as its members
 #include "backend/session/session.h"
+#include "backend/lock/lockManager.h"     // what another holder may take while a LOCK stands
+#include "backend/query/queryable.h"      // ibSourceMetaDataScope — the application a LOCK's names resolve in
+#include "backend/query/queryLowering.h"  // ExecutePackage — the LOCK run as a script runs it
+#include "backend/query/queryTempStore.h" // a TempDataManager's store — the LOCK's holder with no transaction open
+#include "backend/compiler/byteCode.h"    // ibByteCode — a block's `lock` with no where reads none of it
 #include "core/clsid.h"
+#include "core/query/queryParser.h"
 #include "queryRoad.h"   // MeasureSent — the road a totals read took
 
 namespace {
@@ -1009,4 +1015,124 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 		<< "a name that is not a dimension refuses";
 	EXPECT_THROW(balance({ after, ibValue(), ibValue(), ibValue(ibString(wxT("Weight"))) }), ibBackendCoreException)
 		<< "nor a resource";
+}
+
+// A LOCK'S KEYS (docs/private/record-locks.md, stage 7): the values its WHERE ties, held by the register's provider in
+// its namespace — the one a record set's write and an object's own lock use (GetDocPath). Another holder is refused the
+// item the LOCK names, not another, and gets it once the LOCK's holder lets go. A file base's open transaction IS its
+// lock (SQLite: one writer at a time), so there the provider holds the keys by it and the lock table sees none; a
+// TempDataManager holds them with no transaction open, in the lock table, written on a connection of its own beside
+// the session's (a pool of 4).
+TEST_F(AcceptanceAccumulation, ALockHoldsTheValuesItsWhereTiesUntilItsHolderLetsGo)
+{
+	if (!ready) return;
+	ibLockManager* const locks = ibApplicationInstance::GetLockManager();
+	ASSERT_NE(locks, nullptr);
+
+	const auto session = std::make_shared<ibSession>(ibT("lock-keys"), ibSessionKind::Service);
+	ibSessionScope bound(session.get());
+	const ibSourceMetaDataScope application(cfg.get());
+
+	ibSingleLockHolder other(ibT("another session"));
+	const auto itemKey = [this](const ibString& value) {
+		ibLockItem key = ibLockItem::ForNamespace(reg->GetDocPath());
+		key.keyFields.emplace_back(ibT("Item"), ibValue(value));
+		return std::vector<ibLockItem>{ key };
+	};
+
+	const ibQueryPackage package = ibQueryParser().ParsePackage(ibT("LOCK FROM AccumulationRegister.Stock WHERE Item = &Item"));
+	const std::map<ibString, ibValue> nails = { { ibT("Item"), ibValue(ibString(ibT("Nails"))) } };
+
+	// The session's transaction, as a script's BeginTransaction opens it: the provider keeps the LOCK for it.
+	ses_query->BeginTransaction();
+	ibQueryLowering::ExecutePackage(package, nails);
+	EXPECT_NO_THROW(locks->Acquire(itemKey(ibT("Nails")), {}, &other)) << "the file base's transaction is the lock";
+	ses_query->RollBack();
+
+	ibQueryTempDataStore manager;
+	ibQueryLowering::ExecutePackage(package, nails, &manager);
+	EXPECT_THROW(locks->Acquire(itemKey(ibT("Nails")), {}, &other), ibBackendLockException) << "the item the LOCK ties";
+	EXPECT_NO_THROW(locks->Acquire(itemKey(ibT("Screws")), {}, &other)) << "another item";
+	manager.Close();
+	EXPECT_NO_THROW(locks->Acquire(itemKey(ibT("Nails")), {}, &other)) << "Close let it go";
+}
+
+// ANY CONDITION, AS A QUERY'S (Max, 2026-11-26): what no key holds — a comparison, OR, LIKE — narrows nothing and is
+// taken all the same; the item its equality ties is held, whatever the rest says, and the answer counts that one key.
+// A field misspelt where no key reads it is refused, as a query refuses it, not passed over in silence.
+TEST_F(AcceptanceAccumulation, ALockTakesAnyConditionAndKeysItsEqualities)
+{
+	if (!ready) return;
+	ibLockManager* const locks = ibApplicationInstance::GetLockManager();
+	ASSERT_NE(locks, nullptr);
+
+	const auto session = std::make_shared<ibSession>(ibT("lock-any"), ibSessionKind::Service);
+	ibSessionScope bound(session.get());
+	const ibSourceMetaDataScope application(cfg.get());
+
+	ibSingleLockHolder other(ibT("another session"));
+	const auto itemKey = [this](const ibString& value) {
+		ibLockItem key = ibLockItem::ForNamespace(reg->GetDocPath());
+		key.keyFields.emplace_back(ibT("Item"), ibValue(value));
+		return std::vector<ibLockItem>{ key };
+	};
+	const std::map<ibString, ibValue> nails = {
+		{ ibT("Item"), ibValue(ibString(ibT("Nails"))) },
+		{ ibT("Kitchen"), ibValue(ibString(ibT("Kitchen"))) },
+	};
+
+	ibQueryTempDataStore manager;
+	const std::vector<ibQueryLowering::ibQueryPackageResult> answers = ibQueryLowering::ExecutePackage(
+		ibQueryParser().ParsePackage(ibT("LOCK FROM AccumulationRegister.Stock WHERE Item = &Item AND Quantity > 0 "
+		                                 "AND (Warehouse = &Kitchen OR Warehouse LIKE \"B%\")")),
+		nails, &manager);
+	ASSERT_EQ(answers.size(), 1u);
+	ASSERT_NE(answers.front().m_result, nullptr);
+	ASSERT_TRUE(answers.front().m_result->Next());
+	EXPECT_EQ(answers.front().m_result->GetColumn(ibT("Count")).GetNumber().ToInt(), 1) << "one key: the item";
+	EXPECT_THROW(locks->Acquire(itemKey(ibT("Nails")), {}, &other), ibBackendLockException) << "the item its equality ties";
+	EXPECT_NO_THROW(locks->Acquire(itemKey(ibT("Screws")), {}, &other)) << "another item";
+	manager.Close();
+
+	ibQueryTempDataStore misspelt;
+	EXPECT_ANY_THROW(ibQueryLowering::ExecutePackage(
+		ibQueryParser().ParsePackage(ibT("LOCK FROM AccumulationRegister.Stock WHERE Item = &Item AND Quantiti > 0")),
+		nails, &misspelt)) << "a name no key reads is refused, as a query refuses it";
+}
+
+// A RECORD SET'S `LockForUpdate` IS ITS OWN PROPERTY, read back as it was set (stage 12): appended with no data of its
+// own, its row answered no place, and `rs.LockForUpdate = True` went nowhere — the read held the set shared, and a
+// second session read alongside it (found live 2026-11-26).
+TEST_F(AcceptanceAccumulation, ARecordSetsLockForUpdateIsReadBackAsItWasSet)
+{
+	if (!ready) return;
+	const ibValuePtr<ibValueRecordSetObject> set = reg->CreateRecordSetObjectValue(false);
+	ASSERT_NE(static_cast<ibValueRecordSetObject*>(set), nullptr);
+	const long prop = set->FindProp(ibT("LockForUpdate"));
+	ASSERT_NE(prop, ibNOT_FOUND);
+
+	ibValue value;
+	ASSERT_TRUE(set->GetPropVal(prop, value));
+	EXPECT_FALSE(value.GetBoolean()) << "a set reads shared until it is asked otherwise";
+	ASSERT_TRUE(set->SetPropVal(prop, ibValue(true)));
+	ASSERT_TRUE(set->GetPropVal(prop, value));
+	EXPECT_TRUE(value.GetBoolean()) << "the set holds what it was given";
+}
+
+// A BLOCK'S `lock` names its source again, as the package's LOCK (LockByInstructions), and the name resolves in the
+// source's own application: a script's block runs with no application in scope. The test above opens one itself, so it
+// passed while a block on a live base was refused "unknown metaobject kind" (2026-11-26) — this one opens none.
+TEST_F(AcceptanceAccumulation, ABlocksLockFindsItsSourceInTheSourcesApplication)
+{
+	if (!ready) return;
+
+	const auto session = std::make_shared<ibSession>(ibT("block-lock"), ibSessionKind::Service);
+	ibSessionScope bound(session.get());
+	ASSERT_EQ(ibSourceMetaDataScope::Get(), nullptr) << "no application in scope, as a script's block runs";
+
+	const ibValuePtr<ibValueQueryable> stock(new ibValueQueryable(reg->GetQueryable(), ibT("AccumulationRegister.Stock")));
+	ses_query->BeginTransaction();
+	EXPECT_NO_THROW(stock->LockByInstructions(ibByteCode(), 0, 0, {}, {}, ibQueryLockModeAst::Exclusive, nullptr))
+		<< "no where: the table whole, held by the transaction";
+	ses_query->RollBack();
 }

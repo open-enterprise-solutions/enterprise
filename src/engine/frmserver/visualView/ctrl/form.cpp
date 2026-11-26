@@ -51,7 +51,7 @@ ibValueForm::~ibValueForm()
 	if (m_controlOwner != nullptr) m_controlOwner->ControlDecrRef();
 	// The source's ref is released by the MAIN attribute wrapper's dtor (SourceDecrRef), not here.
 	// sys_lock release intentionally tied to source LIFETIME, not form
-	// lifetime — m_formLockHandle on the source RAII-DELETEs the row
+	// lifetime — m_lockHandle on the source RAII-DELETEs the row
 	// when the source's last ref drops (form's DecrRef above is one
 	// such ref; scripts holding the value contribute others). While
 	// any holder is alive the source is still "in use" by someone, so

@@ -461,7 +461,7 @@ bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 		// while still preventing lost updates.
 		if (ibSourceDataObject* const src = GetSourceObject()) {
 			try {
-				src->TryAcquireFormLock();
+				src->TryLock();
 			}
 			catch (const ibBackendLockException& lockErr) {
 				// Conflict — surface the blocking user as a caption badge
@@ -497,7 +497,7 @@ void ibValueForm::RefreshLockBadge()
 		return;
 
 	try {
-		src->TryAcquireFormLock();
+		src->TryLock();
 		// Acquire succeeded — lock is now ours, badge clears.
 		m_lockBadgeHolder.clear();
 	}

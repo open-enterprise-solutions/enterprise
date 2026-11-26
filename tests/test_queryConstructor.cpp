@@ -246,11 +246,11 @@ TEST(QueryConstructorModel, AHiddenStartHidesTheWalkPastAHopNobodyAnswers)
 }
 
 // ===========================================================================
-//  The temp-table store — WHO keeps a temp table alive.
+//  The temp-data store — WHO keeps a temp table, or a lock, alive.
 //
 //  The question the store answers is not about queries but about ownership: without a holder a
 //  temp table lives for one execution, with one it lives until the holder lets go. That is the
-//  whole difference between a batch and a `TempTablesManager`, and it is testable without a
+//  whole difference between a batch and a `TempDataManager`, and it is testable without a
 //  session, a database or a window.
 // ===========================================================================
 
@@ -258,6 +258,10 @@ TEST(QueryConstructorModel, AHiddenStartHidesTheWalkPastAHopNobodyAnswers)
 #include "backend/query/queryable.h"      // ibBackendQueryable — a stored table IS one
 
 namespace {
+
+// A LOCK's holds, as its tables' providers give them — what each one is, the store does not know (here an int: a lock
+// no base was asked for).
+using ibTestHolds = std::vector<std::shared_ptr<void>>;
 
 ibQueryRamTable OneRow(const ibString& column, const ibValue& cell)
 {
@@ -272,7 +276,7 @@ ibQueryRamTable OneRow(const ibString& column, const ibValue& cell)
 
 TEST(QueryTempStore, AFreshStoreHoldsNothing)
 {
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	EXPECT_TRUE(store.Empty());
 	EXPECT_FALSE(store.Has(ibT("Sales")));
 	EXPECT_TRUE(store.Sources().empty());
@@ -280,7 +284,7 @@ TEST(QueryTempStore, AFreshStoreHoldsNothing)
 
 TEST(QueryTempStore, WhatIsPutInCanBeFoundByName)
 {
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(1)));
 
 	EXPECT_TRUE(store.Has(ibT("Sales")));
@@ -292,7 +296,7 @@ TEST(QueryTempStore, ADroppedTableIsGoneFromBothTheNameAndTheRows)
 {
 	// A name removed while its rows stayed alive would be memory nobody can reach and nobody can
 	// free — the reason Drop touches both.
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(1)));
 
 	EXPECT_TRUE(store.Drop(wxT("Sales")));
@@ -304,15 +308,15 @@ TEST(QueryTempStore, DroppingWhatWasNeverThereSaysSo)
 {
 	// False, not a shrug: the caller turns it into "that table does not exist", which is a typo
 	// or a statement that was expected to run and did not.
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	EXPECT_FALSE(store.Drop(wxT("Sales")));
 }
 
 TEST(QueryTempStore, CloseReleasesEverythingAtOnce)
 {
-	// This is `TempTablesManager.Close()` — the one decision there is to make about a set of
+	// This is `TempDataManager.Close()` — the one decision there is to make about a set of
 	// temp tables.
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"),  OneRow(wxT("Ref"), ibValue(1)));
 	store.Put(wxT("Orders"), OneRow(wxT("Ref"), ibValue(2)));
 	ASSERT_EQ(2u, store.Sources().size());
@@ -323,11 +327,61 @@ TEST(QueryTempStore, CloseReleasesEverythingAtOnce)
 	EXPECT_FALSE(store.Has(ibT("Orders")));
 }
 
+TEST(QueryTempStore, ALockSharesTheTablesNamesAndIsLetGoByUnlock)
+{
+	// One name space: `INTO Held` after `LOCK Held FROM …` would name two things. DROP is a table's verb,
+	// UNLOCK the lock's. A lock's name is matched as the language matches names — without regard to case.
+	// …and UNLOCK empties what the store keeps NOW: a manager's lock goes (a transaction keeps its own share, to its end).
+	ibQueryTempDataStore store;
+	const auto transactions = std::make_shared<ibTestHolds>(1, std::make_shared<int>(0));
+	store.Put(ibT("Held"), transactions);
+
+	EXPECT_TRUE(store.Has(ibT("held")));
+	EXPECT_FALSE(store.Empty());
+	EXPECT_FALSE(store.Drop(ibT("Held")));
+	EXPECT_TRUE(store.Unlock(ibT("HELD")));
+	EXPECT_FALSE(store.Has(ibT("Held")));
+	EXPECT_TRUE(store.Empty());
+	EXPECT_TRUE(transactions->empty());
+}
+
+TEST(QueryTempStore, AnUnnamedLockIsLetGoOnlyByClose)
+{
+	// A LOCK without a name (`LOCK <name> FROM`) is none an UNLOCK can say — the manager holds it until it is closed or gone.
+	ibQueryTempDataStore store;
+	store.Put(ibString(), std::make_shared<ibTestHolds>());
+
+	EXPECT_FALSE(store.Has(ibString()));
+	EXPECT_FALSE(store.Unlock(ibString()));
+	EXPECT_FALSE(store.Empty());
+	store.Close();
+	EXPECT_TRUE(store.Empty());
+}
+
+TEST(QueryTempStore, ForgettingTheLocksLeavesTheOtherHolderItsShare)
+{
+	// A package's own store forgets its locks at its end: the transaction holds them from there, and
+	// a share left in the store would hold them as long as a result of that package is read.
+	const auto transactions = std::make_shared<ibTestHolds>(1, std::make_shared<int>(0));
+	{
+		ibQueryTempDataStore store;
+		store.Put(ibT("Held"), transactions);
+		EXPECT_EQ(2, transactions.use_count());
+		store.ForgetLocks();
+		EXPECT_EQ(1, transactions.use_count());
+		EXPECT_FALSE(store.Has(ibT("Held")));
+
+		// …and so does the store's end: a manager that is gone holds nothing.
+		store.Put(ibT("Held"), transactions);
+	}
+	EXPECT_EQ(1, transactions.use_count());
+}
+
 TEST(QueryTempStore, AStoredTableKeepsItsColumnsAndRows)
 {
 	// The table is handed out BY COPY per read, because a temp table is read more than once by
 	// design — that is the point of putting it somewhere.
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(ibString(wxT("A")))));
 
 	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
@@ -360,7 +414,7 @@ TEST(QueryTempStore, AnIndexedEqualityReadsOnlyTheMatchingRows)
 		table.SetCell(row, 1, ibValue(ibString(code)));
 	}
 
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"), std::move(table), { wxT("Code") });
 
 	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
@@ -388,7 +442,7 @@ TEST(QueryTempStore, AnIndexedValueNothingCarriesReadsNothing)
 	const long row = table.AppendRow();
 	table.SetCell(row, 1, ibValue(ibString(wxT("A"))));
 
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"), std::move(table), { wxT("Code") });
 
 	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
@@ -410,7 +464,7 @@ TEST(QueryTempStore, WithoutAnIndexEveryRowIsStillReturned)
 		table.SetCell(row, 1, ibValue(ibString(code)));
 	}
 
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"), std::move(table));   // no indexed columns
 
 	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
@@ -438,7 +492,7 @@ TEST(QueryTempStore, ASecondReadingKeysItsRowsByItsOwnColumns)
 		const long row = table.AppendRow();
 		table.SetCell(row, 1, ibValue(ibString(code)));
 	}
-	ibQueryTempTableStore store;
+	ibQueryTempDataStore store;
 	store.Put(wxT("Sales"), std::move(table), { wxT("Code") });
 
 	const auto twin = std::make_shared<const ibAliasQueryable>(store.Sources().at(wxT("Sales")), wxT("S2"));

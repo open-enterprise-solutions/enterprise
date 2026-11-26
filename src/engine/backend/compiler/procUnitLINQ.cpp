@@ -38,6 +38,7 @@
 
 #include "system/value/valueTable.h"  // ibValueModelTable — what a query ANSWERS with: columns and rows
 #include "system/value/valueQueryable.h"  // ibValueQueryable::TryJoinThroughL3 — RAM-receiver join push-down (Layer 2)
+#include "core/query/queryAST.h"           // ibQueryLockModeAst — `lock` and `lock shared` (ibLinqLock)
 
 #include <algorithm>
 #include <cstdint>         // SIZE_MAX — a window that takes every row
@@ -2480,6 +2481,19 @@ void ibLinqField(ibValue& row, const ibValue& value, long ordinal)
 			_("The projected row is missing where field %d should be stored"), (int)ordinal);
 
 	record->SetField(ordinal, value);
+}
+
+void ibLinqLock(const ibValue& source, const ibByteCode& byteCode, long whereFrom, long whereTo,
+	const ibParamRunUnit& rowSlot, bool shared, const ibRunContext* frame)
+{
+	ibValueQueryable* const queryable = dynamic_cast<ibValueQueryable*>(source.GetRef());
+	if (queryable == nullptr)
+		ibBackendQueryLinqException::Error(_("lock holds tables of the base, and this query reads %s"),
+			source.GetClassName());
+	// The where's answer is the cell the OPER_IF its range ends at asks.
+	queryable->LockByInstructions(byteCode, whereFrom, whereTo, rowSlot,
+		whereFrom < whereTo ? byteCode.m_listCode[whereTo].m_param1 : ibParamRunUnit{},
+		shared ? ibQueryLockModeAst::Shared : ibQueryLockModeAst::Exclusive, frame);
 }
 
 void ibLinqGroupedSample(ibValue& out, const ibValue& key, const ibValue* row)

@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : L4-1 — the living set of temp tables (queryTempStore.h)
+//	Description : L4-1 — the living set of temp tables and locks (queryTempStore.h)
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryTempStore.h"
@@ -156,23 +156,32 @@ const std::vector<long> ibTempStoreQueryable::s_noRows;
 
 } // namespace
 
-ibQueryTempTableStore::~ibQueryTempTableStore()
+ibQueryTempDataStore::~ibQueryTempDataStore()
 {
-	Close();
+	ForgetLocks();   // a manager's locks go with it, a package's own stay the transaction's; the tables go with the members
 }
 
-bool ibQueryTempTableStore::Has(const ibString& name) const
+bool ibQueryTempDataStore::Has(const ibString& name) const
 {
-	return m_sources.contains(name);
+	if (m_sources.contains(name))
+		return true;
+	// A lock's name is matched as the language matches names — without regard to case (an unnamed one has none).
+	return !name.IsEmpty() && std::any_of(m_locks.begin(), m_locks.end(),
+		[&name](const auto& held) { return held.first.CmpNoCase(name) == 0; });
 }
 
-void ibQueryTempTableStore::Put(const ibString& name, ibQueryRamTable&& rows,
-                                const std::vector<ibString>& indexedColumns, const ibMetaData* metaData)
+void ibQueryTempDataStore::Put(const ibString& name, ibQueryRamTable&& rows,
+                               const std::vector<ibString>& indexedColumns, const ibMetaData* metaData)
 {
 	m_sources[name] = std::make_shared<ibTempStoreQueryable>(std::move(rows), indexedColumns, metaData);
 }
 
-bool ibQueryTempTableStore::Drop(const ibString& name)
+void ibQueryTempDataStore::Put(const ibString& name, std::shared_ptr<std::vector<std::shared_ptr<void>>> lock)
+{
+	m_locks.emplace_back(name, std::move(lock));
+}
+
+bool ibQueryTempDataStore::Drop(const ibString& name)
 {
 	const auto it = m_sources.find(name);
 	if (it == m_sources.end())
@@ -183,7 +192,28 @@ bool ibQueryTempTableStore::Drop(const ibString& name)
 	return true;
 }
 
-void ibQueryTempTableStore::Close()
+bool ibQueryTempDataStore::Unlock(const ibString& name)
+{
+	// The holds kept here go NOW: a manager's lock is let go; one the transaction holds (its provider gave it the
+	// transaction, WithLock) lives to the transaction's end (Max, 2026-11-26).
+	const auto held = std::find_if(m_locks.begin(), m_locks.end(),
+		[&name](const auto& lock) { return !name.IsEmpty() && lock.first.CmpNoCase(name) == 0; });
+	if (held == m_locks.end())
+		return false;
+	held->second->clear();
+	m_locks.erase(held);
+	return true;
+}
+
+void ibQueryTempDataStore::Close()
 {
 	m_sources.clear();
+	for (const auto& held : m_locks)
+		held.second->clear();
+	m_locks.clear();
+}
+
+void ibQueryTempDataStore::ForgetLocks()
+{
+	m_locks.clear();
 }

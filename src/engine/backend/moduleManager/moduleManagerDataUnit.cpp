@@ -71,12 +71,20 @@ public:
 
 protected:
 
-	// The source is named by its script path ("Catalogs.Goods"), for a watch and a diagnostic.
+	// ⭐ THE SOURCE IS NAMED AS A QUERY NAMES IT — "Catalog.Goods", by the descriptor its FROM is read through — as
+	// Data.Platform's and Data.From's are: a block's `lock` is the package's LOCK over that name (valueQueryable.cpp),
+	// and a table it holds (`.Goods`, `.Balance(…)`) is named by adding its own. It was the script path
+	// ("Catalogs.Goods"), a second name for the same source. An object no descriptor names keeps that path.
 	virtual ibValue ElementValue(ibValueMetaObject* const& object) const override {
 		const std::shared_ptr<const ibBackendQueryable> queryable = object != nullptr ? QueryableOf(object) : nullptr;
 		if (queryable == nullptr)
 			return ibValue();
-		return new ibValueQueryable(queryable, m_kindName + ibT(".") + object->GetName());
+		const ibQueryableFactory* const factory = m_metaData != nullptr ? m_metaData->GetSourceFactory() : nullptr;
+		const ibQueryableSourceDescriptor* const descriptor = factory != nullptr
+			? factory->ResolveDescriptorById(queryable->GetQueryTableId()) : nullptr;
+		return new ibValueQueryable(queryable, descriptor != nullptr
+			? descriptor->GetNamespace() + ibT(".") + descriptor->GetName()
+			: m_kindName + ibT(".") + object->GetName());
 	}
 
 private:

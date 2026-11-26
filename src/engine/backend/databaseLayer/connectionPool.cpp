@@ -94,7 +94,7 @@ void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> co
 	// 🛑⭐⭐ BUT THE CHANNEL IS NOT FREE FOR THE TAKING, AND THAT IS THE WHOLE DEFECT THIS CARRIES.
 	// `CurrentHolder()` is a thread_local singleton and therefore NEVER null, so this used to pin
 	// EVERY transaction on EVERY connection to the calling thread — including a subsystem with a
-	// private holder of its own. The lock manager writes `sys_lock` on a dedicated connection,
+	// private holder of its own. The lock manager wrote `sys_lock` on a dedicated connection,
 	// deliberately, so its rows are visible to other sessions; its short transaction reserved the
 	// thread's channel on the way in and RELEASED IT on the way out, taking with it the pin of the
 	// long-running transaction that was already there.

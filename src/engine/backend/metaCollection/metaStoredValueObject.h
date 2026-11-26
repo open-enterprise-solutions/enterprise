@@ -363,9 +363,8 @@ public:
 	virtual bool SaveModify() override { return SetConstValue(m_constValue); }
 
 	// Constants are single-row "global" - lock keyed by namespace path
-	// only, no per-key sub-identifier. Soft-lock UX same as ref-objects:
-	// form opens silent on conflict, Write re-throws if persistent.
-	bool TryAcquireFormLock(ibLockMode mode = ibLockMode::Exclusive) override;
+	// only, no per-key sub-identifier, as a ref-object's is by its Ref.
+	bool TryLock(ibLockMode mode = ibLockMode::Exclusive) override;
 
 	//get frame
 	virtual ibBackendValueForm* GetForm() const;

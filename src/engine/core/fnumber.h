@@ -9,6 +9,7 @@
 #include "core/memory/memoryBuffer.h"
 
 #include "core/core.h"  // CORE_API
+#include "core/hash.h"  // the mixer — GetHash
 
 class ibReaderMemory; // core/memory/memoryStream.h
 class ibWriterMemory; // core/memory/memoryStream.h
@@ -184,6 +185,15 @@ public:
 	bool operator>(const ibNumber& r)  const { return Compare(r) >  0; }
 	bool operator<=(const ibNumber& r) const { return Compare(r) <= 0; }
 	bool operator>=(const ibNumber& r) const { return Compare(r) >= 0; }
+
+	// THE NUMBER'S HASH — by its value, as Compare reads it: trailing decimal zeros go into the exponent, so 1, 1.0
+	// and 1.00 are one hash and 1.5 and 1.7 two, whichever tier holds them (core/hash.h). Hot/cold split, as
+	// Compare's: an immediate number is hashed in the caller; the heap tier is GetHashBig.
+	std::uint64_t GetHash() const {
+		if (IsImmediate())
+			return HashImmediate(ImmMantissa(), ImmExp());
+		return GetHashBig();
+	}
 
 	CORE_API bool         IsZero()    const noexcept;
 	bool                  IsHeap()    const noexcept { return (m_payload & 1ULL) != 0; }
@@ -454,6 +464,10 @@ private:
 	CORE_API int          ToIntBig()  const;
 	CORE_API unsigned int ToUIntBig() const;
 
+	// Cold half of GetHash — the heap tier, its limbs freed of trailing zeros; one that then fits 64 bits is hashed
+	// as HashImmediate hashes it, so an equal number in either tier gives one hash.
+	CORE_API std::uint64_t GetHashBig() const;
+
 	// Inline for the same reason as ImmMantissa / ImmExp above: they are the
 	// STORE half of every arithmetic fast path (operator+= and friends, now
 	// defined in this header), so leaving them in the .cpp would put the call
@@ -470,6 +484,16 @@ private:
 
 	void StoreImmediate(int64_t mant, int32_t exp10) noexcept {
 		m_payload = PackImmediate(mant, exp10);
+	}
+
+	// The hash of mant × 10^exp10 — its trailing decimal zeros moved into the exponent first, so every spelling of
+	// one value is one pair; a zero is (0, 0).
+	static std::uint64_t HashImmediate(int64_t mant, int64_t exp10) noexcept {
+		if (mant == 0)
+			exp10 = 0;
+		else
+			for (; mant % 10 == 0; mant /= 10) ++exp10;
+		return ibHashStep(ibHashStep(kIbHashBasis, static_cast<std::uint64_t>(mant)), static_cast<std::uint64_t>(exp10));
 	}
 
 	// Cold halves — both operands outside the immediate-integer tier, so the

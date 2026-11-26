@@ -1,27 +1,23 @@
 /////////////////////////////////////////////////////////////////////////////
 // Pessimistic-lock types — request descriptors and result tags for
-// ibLockManager (sys_lock app-table coordination).
+// ibLockManager (the base's lock file, ibLockFile).
 //
-// sys_lock is for **long-held** locks — those that need to live across
-// transaction boundaries (form-open hold until form-close, multi-step
-// business workflows). Short-lived per-TX serialization is already
-// covered by DB-level row locks (SELECT ... FOR UPDATE / WITH LOCK)
-// in the record-locks Phase 5-7 path, see docs/private/record-locks.md.
+// The lock file holds locks on VALUES of a table's fields — an object's own
+// lock (its Ref, asked by its Lock() and held until it is let go) and the
+// query's LOCK (the keys its WHERE names, held until the business
+// transaction ends — the handle is its ticket,
+// ibDatabaseLayer::AddTicket).
+// The row a write touches is still serialized by the DB row lock (the
+// record-locks Phase 5-7 path, see docs/private/record-locks.md).
 //
-// Lock granularity is per-key inside an open-ended namespace string.
-// Conventions today:
-//   "Catalog.<Name>"
-//   "Document.<Name>"
-//   "AccumulationRegister.<Name>.RecordSet"
-//   "InformationRegister.<Name>.RecordSet"
-//   ...
-// New metaobject kinds add their own prefix without touching the lock
-// layer.
+// The namespace is the table's identity — a metaobject's guid
+// (GetDocPath) — or a subsystem's own word ("Job.<guid>"). New kinds
+// add their own without touching the lock layer.
 //
-// All locks are session-scoped: lifetime = held until explicit Unlock
-// (via ibLockHandle dtor / Release), or session-end cleanup (registry
-// ProcessRemove), or zombie sweep (heartbeat cutoff in registry's
-// JobSweepStale).
+// Lifetime = held until the handle is released (ibLockHandle dtor /
+// Release — an object let go, a transaction ending, a named LOCK's UNLOCK),
+// or session-end cleanup (registry ProcessRemove), or zombie sweep
+// (heartbeat cutoff in registry's JobSweepStale).
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_LOCK_TYPES_H_
@@ -35,27 +31,26 @@
 #include <utility>
 
 // Lock mode — Shared coexists with other Shared, Exclusive blocks all.
-// Auto-acquire paths (form-open) always use Exclusive; Shared is
-// reserved for explicit script-side "block writers while I read
-// consistently" semantics (rare).
+// A write and an object's own lock hold Exclusive; Shared is a read that
+// keeps writers out until it is done — a LOCK SHARED, a record set's
+// Read in a transaction.
 enum class ibLockMode : std::int32_t {
 	Shared    = 0,
 	Exclusive = 1,
 };
 
-// One lock request inside an Acquire batch. Namespace strings follow
-// the metaobject-path convention; keyFields are the identifying
-// values (typically {"Ref", ibValue(refGuid)}; for non-recorder
-// InformationRegister: dimension values).
-//
-// Empty keyFields means "the whole namespace" — coarse-grained lock
-// used for periodic close / Apply only, never the default.
+// One lock request inside an Acquire batch. keyFields are the VALUES it
+// holds — {"Ref", <reference>} for an object, the fields a LOCK's WHERE ties
+// to a value for a table. A field it does not name is any value: two
+// keys of one namespace meet when they agree on every field both name
+// (ibLockKey::Overlap), and empty keyFields — the whole namespace —
+// meets every key.
 //
 // Typed factories `ForRef` / `ForNamespace` cover the common shapes —
 // call sites construct the item via them so the magic "Ref" field
 // name + the SHA-256 key-hash derivation never live in user code.
 // Hash and canonical-text payload are owned by the item via
-// KeyHash() / KeyData() (lazy-cached); lockManager reads them during
+// KeyHash() / KeyData(); lockManager reads them during
 // Acquire's conflict-check + INSERT and no longer composes the hash
 // itself. Adding a new resource kind = adding a new `For*` factory.
 struct BACKEND_API ibLockItem {
@@ -70,17 +65,17 @@ struct BACKEND_API ibLockItem {
 	ibLockItem() = default;
 
 	// Ref-object lock (Catalog / Document / ChartOf*) keyed by the
-	// row's Ref GUID under the metaobject's "<Kind>.<Name>" namespace.
-	// The field name "Ref" matches the row-identifier convention used
-	// across mutable-ref tables; encapsulated here so call sites stay
-	// free of the magic string.
+	// object's REFERENCE under its metaobject's namespace. The field is
+	// "Ref", as the query language names it, and the value the reference
+	// itself — so an object's own lock and a `LOCK … WHERE Ref = &Item` write one
+	// key and meet. (It was the guid as text, which hashes as a text.)
 	static ibLockItem ForRef(const ibString& namespacePath,
-	                          const ibGuid&   refGuid,
+	                          const ibValue&  ref,
 	                          ibLockMode      mode = ibLockMode::Exclusive,
 	                          const ibString& objectName = ibEmptyString) {
 		ibLockItem it;
 		it.namespaceName = namespacePath;
-		it.keyFields.push_back({ ibT("Ref"), ibValue(refGuid.str()) });
+		it.keyFields.push_back({ ibT("Ref"), ref });
 		it.lockMode = mode;
 		it.objectName = objectName;
 		return it;
@@ -99,30 +94,32 @@ struct BACKEND_API ibLockItem {
 		return it;
 	}
 
-	// Hash + canonical text over keyFields — lazy, cached after first
-	// compute. SHA-256 hex is never empty (Hash returns a zero-sentinel
-	// for empty fields), so IsEmpty() reliably means "not cached yet"
-	// for the hash. KeyData uses an explicit valid-bit because empty
-	// keyFields legitimately give an empty canonical string.
-	// Implementations live in lockKeyHash.cpp alongside Hash() /
-	// Canonicalize() so the bytes-layout discipline stays in one TU.
-	const ibString& KeyHash() const;
-	const ibString& KeyData() const;
-
-private:
-	mutable ibString m_keyHashCached;
-	mutable ibString m_keyDataCached;
-	mutable bool     m_keyDataValid = false;
+	// Hash + canonical text over keyFields — made from the fields AS THEY ARE at the call. Implementations live in
+	// lockKeyHash.cpp alongside Hash() / Canonicalize() so the bytes-layout discipline stays in one TU.
+	// ⚠ NOT CACHED: keyFields is a public field, and a cache it does not reset is a key that lies. The provider brings
+	// each value to its field's type (ibDbTableProvider::ExecuteLock) AFTER the LOCK facade had asked KeyData to drop
+	// repeats, and the cached text — the value as written, 1.006 — went to the manager in place of the field's 1.01
+	// (found live 2026-11-26).
+	ibString KeyHash() const;
+	ibString KeyData() const;
 };
 
-// Acquisition options. Default = wait at driver's normal lock-timeout
-// (FB: 30s via TPB). Caller flips wait=false for instant fail-fast
-// probe semantics. allowUpgrade controls in-place S→X promotion on
-// re-entrant acquire by the same session.
+// Acquisition options. `wait` is the table header's: another acquire of
+// the same table is waited for at the driver's lock timeout (FB: 30s via
+// TPB); wait=false refuses at once. `timeoutMs` is the held lock's: 0 —
+// a lock another session holds refuses at once (an object's Lock() over
+// one somebody holds); > 0 — it is waited out for that long, asked
+// again as the holder lets go, then refused (a LOCK in a transaction).
+// allowUpgrade controls in-place S→X promotion on re-entrant acquire by
+// the same session.
 struct BACKEND_API ibLockOptions {
 	bool         wait         = true;
-	std::int32_t timeoutMs    = 0;       // 0 = driver default
+	std::int32_t timeoutMs    = 0;
 	bool         allowUpgrade = true;
 };
+
+// HOW LONG A QUERY'S LOCK WAITS FOR ANOTHER SESSION TO LET GO before it is refused — as long as the base waits for a
+// row another transaction holds (the driver's lock timeout, FB 30 s), so a LOCK and the write behind it wait alike.
+constexpr std::int32_t kLockWaitMs = 30000;
 
 #endif // _IB_LOCK_TYPES_H_

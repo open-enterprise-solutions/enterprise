@@ -257,17 +257,22 @@ public:
 		// edited by another user, try again later".
 		RowLockTimeout,
 
-		// sys_lock acquire failed — another session holds a
+		// A lock-file acquire failed — another owner holds a
 		// conflicting lock on the same (namespace, key). Long-held
-		// pessimistic lock (form-open by another user, etc.).
+		// pessimistic lock (an object's own, a LOCK's, a write's).
 		// UI: "Object is locked by user X".
 		LockConflict,
+
+		// …and that session waits for a lock this one holds: neither
+		// can go on, so the one asking is refused at once rather than
+		// after the wait (ibLockManager::WaitsForItself). Run again.
+		Deadlock,
 	};
 
 	Kind GetKind() const { return m_kind; }
 
 	// Identity of the session/user blocking us. Populated only on
-	// Kind::LockConflict — empty for VersionChanged / RowLockTimeout.
+	// Kind::LockConflict and Kind::Deadlock — empty for VersionChanged / RowLockTimeout.
 	// Soft-lock UI uses this to render the form-caption badge without
 	// parsing the message string.
 	const ibString& GetBlockingUser() const { return m_blockingUser; }
@@ -287,13 +292,16 @@ public:
 	[[noreturn]] static void RowLockTimeoutThrow(const ibString& objectSynonym);
 
 	// Throw a LockConflict kind. Used by ibLockManager::Acquire when
-	// another session holds a conflicting sys_lock row on the same
+	// another owner holds a conflicting lock on the same
 	// (namespace, key). The message names what is locked, who holds it
 	// (a user, else the program on its computer) and since when, and
 	// what frees it — the UI surfaces it directly.
 	[[noreturn]] static void LockConflictThrow(const ibString& objectName,
 	                                            const ibString& blockingUser,
 	                                            const ibDateTime& since);
+	// Throw a Deadlock kind — the holder waits for this session (ibLockManager::Acquire).
+	[[noreturn]] static void DeadlockThrow(const ibString& objectName,
+	                                        const ibString& blockingUser);
 
 private:
 	ibBackendLockException(Kind kind, const ibString& msg)

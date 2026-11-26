@@ -6,15 +6,6 @@
 #include <algorithm>
 #include <cstring>
 
-#ifdef __IBMSW__
-#include <windows.h>
-#else
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/file.h>
-#include <errno.h>
-#endif
-
 namespace {
 
 // Fixed binary layout — matches the byte-offset table in the header
@@ -48,63 +39,24 @@ constexpr uint32_t kVersion = 1;
 
 using ibFb::NowUnixMs;
 
-bool ReadLeaseFile(
-#ifdef __IBMSW__
-	HANDLE h,
-#else
-	int fd,
-#endif
-	LeaseFileV1& out)
+bool ReadLeaseFile(const ibSharedFile& file, LeaseFileV1& out)
 {
-#ifdef __IBMSW__
-	LARGE_INTEGER zero{}; zero.QuadPart = 0;
-	if (!SetFilePointerEx(h, zero, nullptr, FILE_BEGIN))
-		return false;
-	DWORD got = 0;
-	if (!ReadFile(h, &out, kLeaseFileSize, &got, nullptr))
-		return false;
-	return got == kLeaseFileSize;
-#else
-	if (lseek(fd, 0, SEEK_SET) < 0) return false;
-	ssize_t got = read(fd, &out, kLeaseFileSize);
-	return got == (ssize_t)kLeaseFileSize;
-#endif
+	return file.ReadAt(0, &out, kLeaseFileSize);
 }
 
-bool WriteLeaseFile(
-#ifdef __IBMSW__
-	HANDLE h,
-#else
-	int fd,
-#endif
-	const LeaseFileV1& in)
+bool WriteLeaseFile(ibSharedFile& file, const LeaseFileV1& in)
 {
-#ifdef __IBMSW__
-	LARGE_INTEGER zero{}; zero.QuadPart = 0;
-	if (!SetFilePointerEx(h, zero, nullptr, FILE_BEGIN))
+	if (!file.WriteAt(0, &in, kLeaseFileSize))
 		return false;
-	DWORD wrote = 0;
-	if (!WriteFile(h, &in, kLeaseFileSize, &wrote, nullptr))
-		return false;
-	if (!FlushFileBuffers(h)) {
+	if (!file.Flush()) {
 		// Best-effort — slow on SMB but worth pushing through so
 		// followers' next-read sees consistent state. Log to surface
 		// SMB-disconnect / disk-full conditions that would otherwise
 		// leave followers reading the prior generation forever.
-		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: FlushFileBuffers failed: %lu - ")
-		             ibT("followers may see stale state until next write"),
-		             (unsigned long)GetLastError());
+		ibJournalWarning(ibT("db.firebird"), ibT("ibFirebirdLease: the flush of %s failed - ")
+		             ibT("followers may see stale state until next write"), file.GetPath());
 	}
-	return wrote == kLeaseFileSize;
-#else
-	if (lseek(fd, 0, SEEK_SET) < 0) return false;
-	ssize_t wrote = write(fd, &in, kLeaseFileSize);
-	if (fsync(fd) < 0) {
-		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: fsync failed: %d - followers ")
-		             ibT("may see stale state until next write"), errno);
-	}
-	return wrote == (ssize_t)kLeaseFileSize;
-#endif
+	return true;
 }
 
 bool LookValid(const LeaseFileV1& f) {
@@ -126,131 +78,38 @@ ibFirebirdLease::~ibFirebirdLease() {
 }
 
 ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
-	if (m_holdsLock) return AcquireResult::AcquiredLock;
+	if (HoldsLock()) return AcquireResult::AcquiredLock;
 
-#ifdef __IBMSW__
-	// CreateFileW with FILE_SHARE_READ | FILE_SHARE_WRITE. Both flags
-	// matter — *exclusivity* between processes is enforced by the
-	// byte-range LockFileEx call below, not by the file-handle
-	// sharing mode. If the leader opens with FILE_SHARE_READ only,
-	// follower processes calling TryAcquireExclusive (which also
-	// requests GENERIC_WRITE) fail at CreateFile with ERROR_SHARING_
-	// VIOLATION (32) before ever reaching LockFileEx — they can't
-	// even probe whether someone else holds the lock. Allowing
-	// shared write at the handle level lets every process open the
-	// file; only one wins the byte-range lock.
-	m_hFile = CreateFileW(
-		m_leasePath.wc_str(),
-		GENERIC_READ | GENERIC_WRITE,
-		FILE_SHARE_READ | FILE_SHARE_WRITE,
-		nullptr,
-		OPEN_ALWAYS,                        // create if missing
-		FILE_ATTRIBUTE_NORMAL,
-		nullptr);
-	if (m_hFile == INVALID_HANDLE_VALUE) {
-		const DWORD err = GetLastError();
-		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: CreateFile(%s) failed: %lu"),
-		             m_leasePath, (unsigned long)err);
+	// Every process opens the file for reading and writing, shared: exclusivity between them is the sentinel byte's, not
+	// the handle's — a handle opened for reading only would refuse the others' opening, and they could not even probe
+	// whether somebody holds it.
+	auto file = std::make_unique<ibSharedFile>(m_leasePath);
+	if (!file->IsOpen()) {
+		ibJournalWarning(ibT("db.firebird"), ibT("ibFirebirdLease: %s cannot be opened"), m_leasePath);
 		return AcquireResult::IOError;
 	}
 
-	// LockFileEx EXCLUSIVE | FAIL_IMMEDIATELY on a SENTINEL byte
-	// past the lease content. Locking the entire file or the content
-	// range would block follower ReadFile calls with ERROR_LOCK_
-	// VIOLATION (Windows treats exclusive byte-range lock as
-	// preventing reads from non-locking processes on the locked
-	// range — same on SMB clients). Sentinel byte outside the
-	// 98-byte content lets followers read state freely while
-	// exclusivity for leader-election still works (only one process
-	// can lock the sentinel offset).
-	OVERLAPPED ov{};
-	ov.Offset     = kLockSentinelOffset;
-	ov.OffsetHigh = 0;
-	if (!LockFileEx(m_hFile,
-	                LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
-	                0,
-	                1, 0,                  // length 1, offset from ov
-	                &ov)) {
-		const DWORD err = GetLastError();
-		if (err == ERROR_LOCK_VIOLATION || err == ERROR_IO_PENDING) {
-			// Standard "another holder" path. Close handle —
-			// follower mode doesn't need the file open.
-			CloseHandle(m_hFile);
-			m_hFile = INVALID_HANDLE_VALUE;
-			return AcquireResult::AnotherLeaderActive;
-		}
-		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: LockFileEx failed: %lu"),
-		             (unsigned long)err);
-		CloseHandle(m_hFile);
-		m_hFile = INVALID_HANDLE_VALUE;
-		return AcquireResult::IOError;
-	}
-	m_holdsLock = true;
+	// EXCLUSIVE, NEVER WAITING, on a SENTINEL byte past the lease content: a held byte refuses another handle's read of it
+	// on Windows (on a share as well), so the content stays readable to the followers while only one process holds the
+	// sentinel. The byte is the open file's, not the process's (ibFileByteLock): a second lease in the same process meets
+	// the first as another process's does — two lease tests failed on Linux while it was the process's.
+	ibFileByteLock lock(*file, kLockSentinelOffset, ibFileByteLock::ibMode::Exclusive);
+	if (!lock.HoldsByte())
+		return AcquireResult::AnotherLeaderActive;   // the follower keeps no file open
+	m_file = std::move(file);
+	m_lock = std::move(lock);
 	return AcquireResult::AcquiredLock;
-#else
-	// POSIX path — fcntl F_SETLK on the byte-range. On Linux this
-	// honours NFS locks via lockd; samba-mounted CIFS works too.
-	m_fd = open(m_leasePath.ToUtf8().c_str(), O_RDWR | O_CREAT, 0644);
-	if (m_fd < 0) {
-		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: open(%s) failed: %d"),
-		             m_leasePath, errno);
-		return AcquireResult::IOError;
-	}
-
-	// Mirror the Windows sentinel-byte design (kLockSentinelOffset,
-	// length 1) so leader-election semantics are identical cross-
-	// platform. Even though POSIX fcntl is advisory by default (reads
-	// aren't blocked), keeping the lock region small is sound hygiene
-	// and guards against mandatory-locking filesystems (Linux ext
-	// with -o mand) that would otherwise block follower reads.
-	// OFD ("open file description") locks where the platform has them, plain POSIX locks
-	// otherwise. This is not a detail: a classic fcntl lock belongs to the PROCESS, so a
-	// second ibFirebirdLease inside the same process re-takes it happily instead of seeing
-	// AnotherLeaderActive — leader election would not notice a second contender in its own
-	// process, and two lease tests failed on Linux for exactly that reason. An OFD lock
-	// belongs to the open file description, which is what Windows' LockFileEx does per
-	// HANDLE, so the two platforms finally mean the same thing. Linux 3.15+; where the
-	// constant is absent (older kernels, macOS) the old process-wide behaviour remains.
-	struct flock fl{};
-	fl.l_type   = F_WRLCK;
-	fl.l_whence = SEEK_SET;
-	fl.l_start  = kLockSentinelOffset;
-	fl.l_len    = 1;
-#ifdef F_OFD_SETLK
-	fl.l_pid = 0;                        // required to be 0 for OFD commands
-	const int lockCmd = F_OFD_SETLK;
-#else
-	const int lockCmd = F_SETLK;
-#endif
-	if (fcntl(m_fd, lockCmd, &fl) < 0) {
-		if (errno == EAGAIN || errno == EACCES) {
-			close(m_fd);
-			m_fd = -1;
-			return AcquireResult::AnotherLeaderActive;
-		}
-		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: fcntl F_SETLK failed: %d"), errno);
-		close(m_fd);
-		m_fd = -1;
-		return AcquireResult::IOError;
-	}
-	m_holdsLock = true;
-	return AcquireResult::AcquiredLock;
-#endif
 }
 
 bool ibFirebirdLease::WriteSelfAsLeader(const ibString& host, uint16_t port) {
-	if (!m_holdsLock) return false;
+	if (!HoldsLock()) return false;
 
 	// Read current state to preserve generation; bump on every
 	// handoff (= every WriteSelfAsLeader call) so followers can
 	// distinguish "same leader, refreshed heartbeat" from "new
 	// leader took over".
 	LeaseFileV1 cur{};
-#ifdef __IBMSW__
-	const bool hadOld = ReadLeaseFile(m_hFile, cur);
-#else
-	const bool hadOld = ReadLeaseFile(m_fd, cur);
-#endif
+	const bool hadOld = ReadLeaseFile(*m_file, cur);
 	uint64_t nextGen = 1;
 	if (hadOld && LookValid(cur))
 		nextGen = cur.generation + 1;
@@ -272,22 +131,14 @@ bool ibFirebirdLease::WriteSelfAsLeader(const ibString& host, uint16_t port) {
 	// remainder already zero from value-init
 	fresh.reserved = 0;
 
-#ifdef __IBMSW__
-	return WriteLeaseFile(m_hFile, fresh);
-#else
-	return WriteLeaseFile(m_fd, fresh);
-#endif
+	return WriteLeaseFile(*m_file, fresh);
 }
 
 bool ibFirebirdLease::WriteVacating() {
-	if (!m_holdsLock) return false;
+	if (!HoldsLock()) return false;
 
 	LeaseFileV1 cur{};
-#ifdef __IBMSW__
-	if (!ReadLeaseFile(m_hFile, cur)) return false;
-#else
-	if (!ReadLeaseFile(m_fd, cur)) return false;
-#endif
+	if (!ReadLeaseFile(*m_file, cur)) return false;
 	if (!LookValid(cur)) return false;
 
 	// pid = 0 sentinel — real OS pids never zero. Followers see this
@@ -295,58 +146,31 @@ bool ibFirebirdLease::WriteVacating() {
 	// without waiting out the heartbeat staleness timeout.
 	cur.leaderPid       = 0;
 	cur.heartbeatUnixMs = NowUnixMs();
-#ifdef __IBMSW__
-	return WriteLeaseFile(m_hFile, cur);
-#else
-	return WriteLeaseFile(m_fd, cur);
-#endif
+	return WriteLeaseFile(*m_file, cur);
 }
 
 bool ibFirebirdLease::RefreshHeartbeat() {
-	if (!m_holdsLock) return false;
+	if (!HoldsLock()) return false;
 
 	LeaseFileV1 cur{};
-#ifdef __IBMSW__
-	if (!ReadLeaseFile(m_hFile, cur)) return false;
-#else
-	if (!ReadLeaseFile(m_fd, cur)) return false;
-#endif
+	if (!ReadLeaseFile(*m_file, cur)) return false;
 	if (!LookValid(cur)) return false;
 
 	cur.heartbeatUnixMs = NowUnixMs();
-#ifdef __IBMSW__
-	return WriteLeaseFile(m_hFile, cur);
-#else
-	return WriteLeaseFile(m_fd, cur);
-#endif
+	return WriteLeaseFile(*m_file, cur);
 }
 
 ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 	State s;
-	// Followers don't hold the lock; they open the file shared-read
-	// just to peek at the current leader's coordinates.
-#ifdef __IBMSW__
-	HANDLE h = CreateFileW(
-		m_leasePath.wc_str(),
-		GENERIC_READ,
-		FILE_SHARE_READ | FILE_SHARE_WRITE,
-		nullptr,
-		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL,
-		nullptr);
-	if (h == INVALID_HANDLE_VALUE) return s;
+	// The leader reads through its own file; a follower opens it for the read alone, to peek at the leader's coordinates.
 	LeaseFileV1 f{};
-	const bool ok = ReadLeaseFile(h, f);
-	CloseHandle(h);
-	if (!ok) return s;
-#else
-	int fd = open(m_leasePath.ToUtf8().c_str(), O_RDONLY);
-	if (fd < 0) return s;
-	LeaseFileV1 f{};
-	const bool ok = ReadLeaseFile(fd, f);
-	close(fd);
-	if (!ok) return s;
-#endif
+	if (m_file != nullptr) {
+		if (!ReadLeaseFile(*m_file, f)) return s;
+	}
+	else {
+		const ibSharedFile peek(m_leasePath);
+		if (!peek.IsOpen() || !ReadLeaseFile(peek, f)) return s;
+	}
 	if (!LookValid(f)) return s;
 
 	s.version         = f.version;
@@ -361,43 +185,6 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 }
 
 void ibFirebirdLease::Release() {
-	if (m_holdsLock) {
-#ifdef __IBMSW__
-		if (m_hFile != INVALID_HANDLE_VALUE) {
-			// Match the sentinel-byte lock range used in
-			// TryAcquireExclusive (kLockSentinelOffset, length 1).
-			OVERLAPPED ov{};
-			ov.Offset     = kLockSentinelOffset;
-			ov.OffsetHigh = 0;
-			UnlockFileEx(m_hFile, 0, 1, 0, &ov);
-		}
-#else
-		if (m_fd >= 0) {
-			// Released with the same command family it was taken with — see TryAcquireExclusive.
-			struct flock fl{};
-			fl.l_type   = F_UNLCK;
-			fl.l_whence = SEEK_SET;
-			fl.l_start  = kLockSentinelOffset;
-			fl.l_len    = 1;
-#ifdef F_OFD_SETLK
-			fl.l_pid = 0;
-			fcntl(m_fd, F_OFD_SETLK, &fl);
-#else
-			fcntl(m_fd, F_SETLK, &fl);
-#endif
-		}
-#endif
-		m_holdsLock = false;
-	}
-#ifdef __IBMSW__
-	if (m_hFile != INVALID_HANDLE_VALUE) {
-		CloseHandle(m_hFile);
-		m_hFile = INVALID_HANDLE_VALUE;
-	}
-#else
-	if (m_fd >= 0) {
-		close(m_fd);
-		m_fd = -1;
-	}
-#endif
+	m_lock.Release();   // the byte before its file
+	m_file.reset();
 }

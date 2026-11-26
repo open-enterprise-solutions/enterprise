@@ -52,6 +52,7 @@
 
 class ibBackendQueryable;
 class ibQueryableSourceDescriptor;
+enum class ibQueryLockModeAst;   // core/query/queryAST.h — the block's `lock` and the query's LOCK hold alike
 
 // ⭐⭐ THE PIPELINE SURFACE, DECLARED ONCE FOR BOTH VENDORS OF IT. A LINQ chain has two carriers —
 // this one (a DB-backed source and every fold over it) and `ibValueQuery` (the RAM pipeline tail in
@@ -77,7 +78,7 @@ class BACKEND_API ibValueQueryable : public ibValueDynamicMembers
 	};
 
 	std::shared_ptr<const ibBackendQueryable>   m_queryable;
-	ibString                                    m_sourceName;   // "Catalogs.Goods" — watch / diagnostics
+	ibString                                    m_sourceName;   // "Catalog.Goods", as a query names it — watch, diagnostics, `lock`
 	// The tables living in this one — the sources whose owner it is (GetOwnerQueryable): a register's `Balance`,
 	// a document's `Goods`. Found by the constructor; a chain link has none.
 	std::vector<ibQueryableSourceDescriptor*>   m_children;
@@ -198,6 +199,15 @@ public:
 	bool NarrowByInstructions(const struct ibByteCode& byteCode, long from, long to,
 		const struct ibParamRunUnit& rowSlot, const struct ibParamRunUnit& resultSlot,
 		const struct ibRunContext* frame);
+
+	// ⭐⭐ …AND HOLD THIS SOURCE'S RECORDS, keyed by that predicate — the block's `lock` (OPER_LINQ_LOCK). The
+	// tree is read the same way; here a predicate that does not read is REFUSED, never stepped round: a lock
+	// that quietly covered more, or less, than the `where` before it says is a lock nobody can reason about.
+	// `from == to` — no `where`: the table is held whole. Raises as the query's LOCK does: outside a
+	// transaction, on a source that is no table of the base, on a condition no key can hold.
+	void LockByInstructions(const struct ibByteCode& byteCode, long from, long to,
+		const struct ibParamRunUnit& rowSlot, const struct ibParamRunUnit& resultSlot,
+		ibQueryLockModeAst mode, const struct ibRunContext* frame);
 
 	// Foreach — stream the selection as row references (no materialised Array).
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;

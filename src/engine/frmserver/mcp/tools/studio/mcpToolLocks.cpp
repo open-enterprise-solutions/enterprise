@@ -95,8 +95,8 @@ public:
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-			// WHAT IS LOCKED, in words a person recognises. keyData is kept in the row precisely
-			// so a conflict can be explained rather than shown as a hash.
+			// WHAT IS LOCKED: the table, and the key — the fields it names, each value as its hash
+			// (the conflict is read from those; a key naming no field is the whole table).
 			entry->SetValue(ibT("object"), row.namespaceName);
 			entry->SetValue(ibT("key"), row.keyData);
 

@@ -54,7 +54,7 @@ void ibValueRecordSetObjectAccumulationRegister::FillMembers(ibMemberTable& help
 
 bool ibValueRecordSetObjectAccumulationRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	return false;
+	return ibValueRecordSetObject::SetPropVal(lPropNum, varPropVal);   // the set's own (LockForUpdate) — the base's
 }
 
 bool ibValueRecordSetObjectAccumulationRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

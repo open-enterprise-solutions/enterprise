@@ -5,7 +5,7 @@
 #include "blockSyntaxLINQ.h"
 
 #include "core/compiler/translateCode.h"   // GetKeyWord - the words are the lexer's
-#include "core/compiler/codeDef.h"         // KEY_FROM ... KEY_RESTRICT, CODE_CES
+#include "core/compiler/codeDef.h"         // KEY_FROM ... KEY_SHARED, CODE_CES
 
 #include "core/stringUtils.h"
 #include "core/stringTokenizer.h"   // ibSplit — the names a clause lists
@@ -176,6 +176,14 @@ std::vector<int> ibLinqClausesAfter(int lastKeyword)
 	case KEY_INTO:   return { KEY_WHERE, KEY_SELECT, KEY_ORDERBY, KEY_SKIP, KEY_TAKE };
 	// `Select` closes the query; only `Distinct` remains.
 	case KEY_SELECT: return { KEY_DISTINCT };
+	// ⭐ `Lock` HOLDS THE SOURCE, keyed by the `Where` right before it — so it is offered where it can stand,
+	// after the source and after a `Where`. What follows it reads the same source: no second `From`, no `Join`
+	// (the compiler refuses a lock beside either).
+	case KEY_IN:
+	case KEY_WHERE:
+		return { KEY_WHERE, KEY_LOCK, KEY_SELECT, KEY_ORDERBY, KEY_GROUP, KEY_JOIN, KEY_TAKE, KEY_SKIP, KEY_FROM };
+	case KEY_LOCK:
+	case KEY_SHARED: return { KEY_WHERE, KEY_SELECT, KEY_ORDERBY, KEY_GROUP, KEY_TAKE, KEY_SKIP };
 	default:
 		// `From` again: a second source is how this language spells a cross product.
 		return { KEY_WHERE, KEY_SELECT, KEY_ORDERBY, KEY_GROUP, KEY_JOIN, KEY_TAKE, KEY_SKIP, KEY_FROM };
@@ -326,6 +334,19 @@ ibString ibLinqBlock::Write(const ibString& indent, ibString& refusal, bool draf
 		return ibString();
 	};
 
+	// ⭐ THE LOCK, BEFORE THE CONDITIONS THAT ONLY FILTER: its key is the `Where` written right before it, and
+	// that is all the compiler keys it by (compileCodeLINQ.cpp). It holds the one source; with a second the
+	// compiler refuses it, and so is it refused here, live, rather than at OK.
+	if (m_lock) {
+		if (m_sources.size() > 1)
+			refuse(ibString::Format(_("'%s' holds the query's one source: with a second source or a join, a query's LOCK says what it holds."),
+				word(KEY_LOCK)));
+		writeConditions({ m_lockKey });
+		lines.push_back(word(KEY_LOCK) + (m_lockShared ? ibString(ibT(" ")) + word(KEY_SHARED) : ibString()));
+		say(KEY_LOCK, true);
+		if (m_lockShared)
+			say(KEY_SHARED, false);
+	}
 	writeConditions(m_conditions);
 
 	// A total, or a condition on groups, with nothing grouped would be written nowhere - said instead.
@@ -590,7 +611,7 @@ bool ibLinqBlock::Parse(const ibString& text, ibLinqBlock& block, ibString& refu
 		if (lexer.GetLexAt(i).m_numString <= tokenEnd(i - 1))
 			return -1;   // the name touches its dot: `o.Select` is a name, as the lexer says
 		for (const int key : { KEY_FROM, KEY_JOIN, KEY_IN, KEY_ON, KEY_EQUALS, KEY_WHERE, KEY_GROUP, KEY_BY, KEY_INTO,
-				KEY_ORDERBY, KEY_ASCENDING, KEY_DESCENDING, KEY_SKIP, KEY_TAKE, KEY_SELECT, KEY_DISTINCT })
+				KEY_ORDERBY, KEY_ASCENDING, KEY_DESCENDING, KEY_SKIP, KEY_TAKE, KEY_SELECT, KEY_DISTINCT, KEY_LOCK, KEY_SHARED })
 			if (lexer.GetLexAt(i).m_valData.GetString().IsSameAs(Word(key), false))
 				return key;
 		return -1;
@@ -603,7 +624,7 @@ bool ibLinqBlock::Parse(const ibString& text, ibLinqBlock& block, ibString& refu
 	};
 	const auto opens = [](int key) {
 		switch (key) {
-		case KEY_FROM: case KEY_JOIN: case KEY_WHERE: case KEY_GROUP: case KEY_ORDERBY:
+		case KEY_FROM: case KEY_JOIN: case KEY_WHERE: case KEY_LOCK: case KEY_GROUP: case KEY_ORDERBY:
 		case KEY_SKIP: case KEY_TAKE: case KEY_SELECT: case KEY_DISTINCT:
 			return true;
 		default:
@@ -813,6 +834,23 @@ bool ibLinqBlock::Parse(const ibString& text, ibLinqBlock& block, ibString& refu
 			// Before a group a condition reads the rows; after it, the groups.
 			(grouped ? block.m_groupConditions : block.m_conditions).push_back(span(s + 1, e));
 			break;
+		case KEY_LOCK: {
+			// Its key is the `Where` right before it — one at most, which the compiler holds it to as well; a
+			// lock written twice, or after the groups, is not a block the constructor builds.
+			const bool shared = isKey(s + 1, KEY_SHARED);
+			if (block.m_lock || grouped || block.m_conditions.size() > 1 || s + (shared ? 2 : 1) != e) {
+				refusal = ibString::Format(_("'%s' is not written as the constructor reads it: once, after the source or "
+					"its one key condition, before the groups."), Word(KEY_LOCK));
+				return false;
+			}
+			block.m_lock = true;
+			block.m_lockShared = shared;
+			if (!block.m_conditions.empty()) {
+				block.m_lockKey = block.m_conditions.front();
+				block.m_conditions.clear();
+			}
+			break;
+		}
 		case KEY_GROUP: {
 			if (grouped) {
 				refusal = _("The query groups twice, which the constructor does not build yet.");

@@ -636,6 +636,13 @@ public:
 			ibMcpText("Keeps the rows the condition holds for. Written before any projection it is "
 				"offered to the source itself, which then filters where the data is.")));
 		clauses.push_back(clause(
+			word(KEY_LOCK) + ibT(" [") + word(KEY_SHARED) + ibT("]"),
+			ibMcpText("Holds the source's records before a row is read, until the transaction ends: "
+				"keyed by the `where` written right before it (a field equal to a value keys it, "
+				"the rest of the condition narrows nothing), the whole table when none is. A `where` after it only filters. Inside a transaction "
+				"only, over a table of the base, in a query with one `from` and no `join` - a query's "
+				"LOCK says what a join locks.")));
+		clauses.push_back(clause(
 			word(KEY_GROUP) + ibT(" <expr> ") + word(KEY_BY) + ibT(" <key> [")
 				+ word(KEY_INTO) + ibT(" <name>]"),
 			ibMcpText("Collects rows under a key. Without `into` the grouping ENDS the query and it "

@@ -246,8 +246,10 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 		if (m_queryText == nullptr)
 			return;
 		wxString text = m_queryText->GetText();
-		// A LIST FOLDS THROUGH ITS OWN SETTINGS — its arbitrary query carries no TOTALS.
-		if (!ibShowQueryConstructor(this, text, SourceMetaData(), /*readOnly*/false, ibQueryExclude_Totals))
+		// A LIST FOLDS THROUGH ITS OWN SETTINGS — its arbitrary query carries no TOTALS. Nor a LOCK: a list is read
+		// a page at a time for as long as it is open, with no build to end, and a lock would last as long.
+		if (!ibShowQueryConstructor(this, text, SourceMetaData(), /*readOnly*/false,
+				ibQueryExclude_Totals | ibQueryExclude_Locks))
 			return;
 		m_queryText->SetText(text);
 		ApplyQueryToList();   // a query built in the constructor changes the pickers the same way a typed one does

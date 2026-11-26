@@ -1360,9 +1360,9 @@ public:
 	// A HASH THAT AGREES WITH CompareValueLS — the contract is one-way: values
 	// that ORDER EQUAL must hash equal. The converse is not required, so a
 	// COARSER hash is always safe (the comparison resolves the collision) and a
-	// finer one is a bug. That is why a number hashes by its integer part: 1 and
-	// 1.0 order equal and must land together, while 1.5 sharing their bucket
-	// costs one extra comparison and nothing else.
+	// finer one is a bug. A scalar hashes as its own type does (GetHash of the
+	// flag, the date, the number, the text): a number by its value, so 1 and 1.0,
+	// which order equal, share a hash, and 1.5 and 1.7 do not.
 	//
 	// Override it wherever CompareValueLS is overridden, and for the same reason
 	// — the two answer one question between them. A class that changes what
@@ -1683,22 +1683,6 @@ private:
 	BACKEND_API static void DebugValueDelete() noexcept;
 #endif
 };
-
-// ---------------------------------------------------------------------------
-// THE MIXER, once. Every value hash in the engine is spelled through these two and
-// nowhere else — five hand-written copies of FNV-1a is five chances for one of them
-// to be typed slightly differently, and a hash that differs by site is not a hash.
-//
-// ⚠ ACCUMULATE IN uint64_t, NARROW ONCE AT THE END. size_t is 32 bits on the x86
-// build while these constants are 64, so a size_t accumulator silently TRUNCATES
-// them and that build runs a different — and much worse — hash than the x64 one.
-// MSVC does say so (C4305/C4309), but only when the SOLUTION is built: the CMake
-// test tree is x64, so the whole family of this defect is invisible there.
-constexpr std::uint64_t kIbHashBasis = 14695981039346656037ULL;   // FNV-1a offset basis
-inline std::uint64_t ibHashCombine(std::uint64_t h, std::uint64_t v)
-{
-	return (h ^ v) * 1099511628211ULL;                            // FNV-1a prime
-}
 
 // KEY POLICY — the one way to key a hash container BY VALUE.
 //

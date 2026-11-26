@@ -2252,15 +2252,22 @@ msgstr "%s: дані було змінено іншим користувачем
 msgid "%s is currently being edited by another user. Please try again."
 msgstr "%s зараз редагує інший користувач. Спробуйте ще раз."
 
-#: src/engine/backend/backend_exception.cpp:679
+#: src/engine/backend/backend_exception.cpp:704
 #, c-format
-msgid "%s is open for editing by %s. It is free when it is closed there or that session ends."
-msgstr "%s відкрито для зміни (%s). Звільниться, коли його там закриють або цей сеанс завершиться."
+msgid "%s is locked by %s. It is free when that session lets it go or ends."
+msgstr "%s заблоковано (%s). Звільниться, коли цей сеанс зніме блокування або завершиться."
 
-#: src/engine/backend/backend_exception.cpp:681
+#: src/engine/backend/backend_exception.cpp:707
 #, c-format
-msgid "%s is open for editing by %s since %s. It is free when it is closed there or that session ends."
-msgstr "%s відкрито для зміни (%s, з %s). Звільниться, коли його там закриють або цей сеанс завершиться."
+msgid "%s is locked by %s since %s. It is free when that session lets it go or ends."
+msgstr "%s заблоковано (%s, з %s). Звільниться, коли цей сеанс зніме блокування або завершиться."
+
+#: src/engine/backend/backend_exception.cpp:717
+#, c-format
+msgid ""
+"%s is locked by %s, which waits for a lock this session holds: neither could go "
+"on, so this one is refused. Run it again."
+msgstr "%s заблоковано (%s), а той сеанс чекає на блокування, яке тримає цей: ніхто не зміг би продовжити, тож цьому відмовлено. Виконайте ще раз."
 
 #: src/engine/backend/lock/lockManager.cpp:127
 #, c-format
@@ -2893,6 +2900,10 @@ msgstr "Неможливо зафіксувати транзакцію: її в�
 msgid "Cannot roll back: no transaction is open"
 msgstr "Неможливо скасувати: немає відкритої транзакції"
 
+#: src/engine/backend/databaseLayer/databaseLayer.cpp:151
+msgid "Nothing can be held until the transaction ends: no transaction is open"
+msgstr "Нічого не можна втримати до кінця транзакції: транзакцію не відкрито"
+
 #: src/engine/backend/databaseLayer/databaseMaterializeBuilder.cpp:94
 #, c-format
 msgid "The database engine cannot truncate a period to '%s'"
@@ -3343,37 +3354,43 @@ msgstr "Виконання коду: фонове виконання не зап
 msgid "Running code: no run called '%s' - it was started by another application, or this one has been restarted since"
 msgstr "Виконання коду: немає виконання з іменем '%s' - його запустив інший застосунок, або цей застосунок відтоді перезапускався"
 
-#: src/engine/backend/lock/lockKeyHash.cpp:94
-msgid "Lock key contains an unsupported reference value"
-msgstr "Ключ блокування містить непідтримуване значення посилання"
-
 #: src/engine/backend/lock/lockKeyHash.cpp:104
 msgid "Lock key contains an unsupported value type"
 msgstr "Ключ блокування містить непідтримуваний тип значення"
 
-#: src/engine/backend/lock/lockManager.cpp:95
-msgid "ibLockManager: failed to insert the lock key."
-msgstr "ibLockManager: не вдалося вставити ключ блокування."
-
-#: src/engine/backend/lock/lockManager.cpp:146
+#: src/engine/backend/lock/lockManager.cpp:112
 msgid "ibLockManager::Acquire requires an active session or a custom holder."
 msgstr "Для ibLockManager::Acquire потрібен активний сеанс або власний тримач."
 
-#: src/engine/backend/lock/lockManager.cpp:163
-msgid "ibLockManager::Acquire - database is not open."
-msgstr "ibLockManager::Acquire - базу даних не відкрито."
+#: src/engine/backend/lock/lockFile.cpp:146
+#, c-format
+msgid "A key of %s is too long to be held"
+msgstr "Ключ %s задовгий, щоб його заблокувати"
 
-#: src/engine/backend/lock/lockManager.cpp:255
-msgid "ibLockManager: failed to upgrade the held lock."
-msgstr "ibLockManager: не вдалося підвищити утримуване блокування."
+#: src/engine/backend/lock/lockFile.cpp:426
+#, c-format
+msgid "The lock file %s cannot be opened"
+msgstr "Файл блокувань %s не відкривається"
 
-#: src/engine/backend/lock/lockManager.cpp:273
-msgid "ibLockManager: failed to insert sys_lock row."
-msgstr "ibLockManager: не вдалося вставити рядок sys_lock."
+#: src/engine/backend/lock/lockFile.cpp:433
+#, c-format
+msgid "The lock file %s stayed held by another process"
+msgstr "Файл блокувань %s так і залишився зайнятим іншим процесом"
 
-#: src/engine/backend/lock/lockManager.cpp:300
-msgid "ibLockManager: the lock header stayed busy."
-msgstr "ibLockManager: заголовок блокування залишався зайнятим."
+#: src/engine/backend/lock/lockFile.cpp:447
+#, c-format
+msgid "The lock file %s cannot be written"
+msgstr "До файлу блокувань %s не вдається записати"
+
+#: src/engine/backend/lock/lockFile.cpp:468
+#, c-format
+msgid "The lock file %s cannot be read"
+msgstr "Файл блокувань %s не читається"
+
+#: src/engine/backend/lock/lockFile.cpp:934
+#, c-format
+msgid "The lock file %s has no free slot for another owner"
+msgstr "У файлі блокувань %s немає вільного місця для ще одного власника"
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:307
 #: src/engine/backend/metaCollection/partial/accountingRegister.h:985
@@ -4438,6 +4455,7 @@ msgstr "читання константи '%s'"
 
 #: src/engine/backend/metaCollection/metaStoredValueObjectRecord.cpp:339
 #: src/engine/backend/metaCollection/partial/commonObjectRefQuery.cpp:90
+#: src/engine/backend/query/lowering/queryLock.cpp:440
 msgid "Lock manager not initialised"
 msgstr "Менеджер блокувань не ініціалізовано"
 
@@ -7277,8 +7295,8 @@ msgid "window functions are not executed yet: the language reads OVER (...), the
 msgstr "віконні функції поки не виконуються: мова читає OVER (...), але рушій запитів його не виконує"
 
 #: src/engine/backend/query/queryLowering.cpp:1688
-msgid "an arithmetic / CASE expression over a JOIN is computed over the rows the join makes, and SELECT * or FOR UPDATE keeps them where they are: name the fields, or lock the rows in a query of their own"
-msgstr "арифметичний вираз / CASE над JOIN обчислюється за рядками, які дає з'єднання, а SELECT * або FOR UPDATE залишає їх на місці: перелічіть поля або заблокуйте рядки окремим запитом"
+msgid "an arithmetic / CASE expression over a JOIN is computed over the rows the join makes, and SELECT * keeps them where they are: name the fields"
+msgstr "арифметичний вираз / CASE над JOIN обчислюється за рядками, які дає з'єднання, а SELECT * залишає їх на місці: перелічіть поля"
 
 #: src/engine/backend/query/queryLowering.cpp:2000
 msgid "VALUETYPE takes the value whose type is asked"
@@ -7325,8 +7343,8 @@ msgstr "переходу через крапку за посиланням ту�
 
 #: src/engine/backend/query/queryLowering.cpp:2303
 #, c-format
-msgid "'%s' is not a field, and this condition reads one. In a WHERE the engine reads such a value one level down itself when the query names its fields (not SELECT *, not FOR UPDATE, not inside a table's own parameters)"
-msgstr "'%s' - не поле, а ця умова читає поле. У WHERE рушій сам читає таке значення рівнем нижче, якщо запит перелічує свої поля (не SELECT *, не FOR UPDATE, не всередині власних параметрів таблиці)"
+msgid "'%s' is not a field, and this condition reads one. In a WHERE the engine reads such a value one level down itself when the query names its fields (not SELECT *, not inside a table's own parameters)"
+msgstr "'%s' - не поле, а ця умова читає поле. У WHERE рушій сам читає таке значення рівнем нижче, якщо запит перелічує свої поля (не SELECT *, не всередині власних параметрів таблиці)"
 
 #: src/engine/backend/query/queryLowering.cpp:2521
 msgid "OR in this WHERE is not lowered to flat conditions"
@@ -7447,17 +7465,9 @@ msgstr "гілка UNION %d вибирає колонок: %u, а перша - %
 msgid "a subquery / UNION branch may not use TOTALS yet"
 msgstr "підзапит / гілка UNION поки не може використовувати TOTALS"
 
-#: src/engine/backend/query/queryLowering.cpp:5062
-msgid "FOR UPDATE cannot stand beside TOTALS: lock the rows with a plain query first, then total them"
-msgstr "FOR UPDATE не може стояти поруч із TOTALS: спочатку заблокуйте рядки простим запитом, потім підбийте за ними підсумки"
-
 #: src/engine/backend/query/queryLowering.cpp:5172
 msgid "TOTALS and ORDER BY over SELECT * or SELECT DISTINCT may name only the fields the query selects"
 msgstr "TOTALS і ORDER BY над SELECT * або SELECT DISTINCT можуть вказувати лише поля, які вибирає запит"
-
-#: src/engine/backend/query/queryLowering.cpp:5672
-msgid "FOR UPDATE cannot be used with UNION: a composed result holds no rows to lock"
-msgstr "FOR UPDATE не можна використовувати з UNION: у складеному результаті немає рядків, які можна заблокувати"
 
 #: src/engine/backend/query/queryLowering.cpp:5790
 msgid "a reference-path JOIN (alias.field) needs an explicit alias (AS)"
@@ -7548,23 +7558,94 @@ msgstr "впорядкованим значенням"
 msgid "'%s' is already aggregated, so it cannot also be a grouping field"
 msgstr "'%s' вже агреговано, тому не може бути ще й полем групування"
 
-#: src/engine/backend/query/queryLowering.cpp:7159
-#: src/engine/backend/query/queryLowering.cpp:7480
+#: src/engine/backend/query/lowering/queryPackage.cpp:123
+#: src/engine/backend/query/lowering/queryPackage.cpp:472
 #, c-format
 msgid "temporary table '%s' does not exist"
 msgstr "тимчасова таблиця '%s' не існує"
+
+#: src/engine/backend/query/lowering/queryPackage.cpp:136
+#: src/engine/backend/query/lowering/queryPackage.cpp:483
+#, c-format
+msgid "UNLOCK %s: no lock has that name"
+msgstr "UNLOCK %s: блокування з таким ім'ям немає"
+
+#: src/engine/backend/query/lowering/queryPackage.cpp:70
+#: src/engine/backend/query/lowering/queryPackage.cpp:157
+#: src/engine/backend/query/lowering/queryPackage.cpp:667
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:302
+#, c-format
+msgid "'%s' already names a temporary table or a lock"
+msgstr "Ім'я '%s' вже має тимчасова таблиця або блокування"
+
+#: src/engine/backend/query/lowering/queryLock.cpp:114
+#, c-format
+msgid "'%s' is a field of more than one table of this LOCK: name the table"
+msgstr "'%s' - поле кількох таблиць цього LOCK: вкажіть таблицю"
+
+#: src/engine/backend/query/lowering/queryLock.cpp:119
+#, c-format
+msgid "no table of this LOCK has the field '%s'"
+msgstr "жодна таблиця цього LOCK не має поля '%s'"
+
+#: src/engine/backend/query/lowering/queryLock.cpp:122
+#, c-format
+msgid "the condition of '%s' reads its own fields, not '%s'"
+msgstr "умова '%s' читає свої поля, а не '%s'"
+
+#: src/engine/backend/query/lowering/queryLock.cpp:126
+#, c-format
+msgid "'%s' has no field '%s'"
+msgstr "У '%s' немає поля '%s'"
+
+#: src/engine/backend/query/lowering/queryLock.cpp:224
+#, c-format
+msgid "LOCK holds tables of the base: '%s' is not one"
+msgstr "LOCK блокує таблиці бази: '%s' не з них"
+
+#: src/engine/backend/query/lowering/queryLock.cpp:357
+#, c-format
+msgid "IN (SELECT ...) in a LOCK selects as many fields as it is compared with: '%s'"
+msgstr "IN (SELECT ...) у LOCK вибирає стільки полів, скільки з ним порівнюється: '%s'"
+
+#: src/engine/backend/query/provider/database/dbTableProvider.cpp:5104
+msgid ""
+"LOCK holds until the transaction ends, and no transaction is open: begin one "
+"before the query that locks, or hand the query a TempDataManager to hold it"
+msgstr "LOCK тримає блокування до кінця транзакції, а транзакцію не відкрито: почніть її до запиту, який блокує, або дайте запиту TempDataManager, щоб тримав він"
+
+#: src/engine/backend/backend_exception.cpp:229
+msgid "Lock holds the query's one source, once, before its first row is read: after a second From, a Join or the groups of an Into it has nothing to stand before. What a join locks is said by a query's LOCK."
+msgstr "Lock утримує єдине джерело запиту, один раз, до читання першого рядка: після другого From, Join або груп Into йому нема перед чим стояти. Що блокує з'єднання, каже LOCK запиту."
+
+#: src/engine/backend/backend_exception.cpp:231
+msgid "Lock is keyed by the one Where written right before it: join its conditions with And, and write a Where that only filters after the Lock."
+msgstr "Ключ Lock — єдиний Where, написаний безпосередньо перед ним: об'єднайте його умови через And, а Where, що лише фільтрує, напишіть після Lock."
+
+#: src/engine/backend/system/value/valueQueryable.cpp:857
+#, c-format
+msgid "lock holds tables of the base, and '%s' is not one"
+msgstr "lock утримує таблиці бази, а '%s' не з них"
+
+#: src/engine/backend/system/value/valueQueryable.cpp:865
+#, c-format
+msgid "lock is keyed by the where before it, and that where does not read as a query's condition: %s"
+msgstr "ключ lock — where перед ним, а цей where не читається як умова запиту: %s"
+
+#: src/engine/backend/system/value/valueQueryable.cpp:868
+msgid "lock is keyed by the where before it, and a value that where reads is not a plain variable of this procedure"
+msgstr "ключ lock — where перед ним, а значення, яке цей where читає, не проста змінна цієї процедури"
+
+#: src/engine/backend/compiler/procUnitLINQ.cpp:2491
+#, c-format
+msgid "lock holds tables of the base, and this query reads %s"
+msgstr "lock утримує таблиці бази, а цей запит читає %s"
 
 #: src/engine/backend/query/queryLowering.cpp:7176
 #: src/engine/backend/query/queryLowering.cpp:7649
 #, c-format
 msgid "two statements of this package name their result '%s'"
 msgstr "два оператори цього пакета називають свій результат '%s'"
-
-#: src/engine/backend/query/queryLowering.cpp:7182
-#: src/engine/backend/query/queryLowering.cpp:7664
-#, c-format
-msgid "temporary table '%s' already exists"
-msgstr "тимчасова таблиця '%s' вже існує"
 
 #: src/engine/backend/query/queryLowering.cpp:7240
 #, c-format
@@ -9030,9 +9111,9 @@ msgstr "Помилка перетворення значення. Має бут�
 msgid "Structure ctor: first argument must be a comma-separated field name string"
 msgstr "Конструктор Structure: перший аргумент має бути рядком імен полів через кому"
 
-#: src/engine/backend/system/value/valueQuery.cpp:265
-msgid "TempTablesManager expects a TempTablesManager value"
-msgstr "TempTablesManager очікує значення TempTablesManager"
+#: src/engine/backend/system/value/valueQuery.cpp:266
+msgid "TempDataManager expects a TempDataManager value"
+msgstr "TempDataManager очікує значення TempDataManager"
 
 #: src/engine/backend/system/value/valueQuery.cpp:338
 msgid "The query result has already been read: run the query again to unload it"
@@ -10614,9 +10695,21 @@ msgstr "після першої вибірки LINK очікується JOIN"
 msgid "expected the name of a selection after JOIN"
 msgstr "після JOIN очікується ім'я вибірки"
 
-#: src/engine/core/query/queryParser.cpp:365
+#: src/engine/core/query/queryParser.cpp:366
 msgid "expected a temporary-table name after DROP"
 msgstr "після DROP очікується ім'я тимчасової таблиці"
+
+#: src/engine/core/query/queryParser.cpp:378
+msgid "expected after UNLOCK the name a LOCK was given: LOCK <name> FROM <table>"
+msgstr "після UNLOCK очікується ім'я, дане блокуванню: LOCK <ім'я> FROM <таблиця>"
+
+#: src/engine/core/query/queryParser.cpp:405
+msgid "expected FROM before the tables a LOCK holds: LOCK [SHARED] [<name>] FROM <table>"
+msgstr "перед таблицями блокування очікується FROM: LOCK [SHARED] [<ім'я>] FROM <таблиця>"
+
+#: src/engine/core/query/queryParser.cpp:408
+msgid "LOCK holds tables of the base: a nested query or a table handed in holds no rows of it"
+msgstr "LOCK блокує таблиці бази: у вкладеному запиті чи переданій таблиці немає її рядків"
 
 #: src/engine/core/query/queryParser.cpp:389
 msgid "expected a number after TOP"
@@ -10664,10 +10757,6 @@ msgstr "після AS очікується псевдонім"
 #: src/engine/core/query/queryParser.cpp:642
 msgid "INTO belongs to a statement of a query package, not to a nested table"
 msgstr "INTO належить до оператора пакета запитів, а не до вкладеної таблиці"
-
-#: src/engine/core/query/queryParser.cpp:644
-msgid "FOR UPDATE belongs to a statement, not to a nested table"
-msgstr "FOR UPDATE належить до оператора, а не до вкладеної таблиці"
 
 #: src/engine/core/query/queryParser.cpp:651
 msgid "TOTALS belongs to a statement's result, not to a nested table"
@@ -14641,10 +14730,6 @@ msgstr "Знищення тимчасової таблиці"
 msgid "Select under a name"
 msgstr "Вибірка під іменем"
 
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2556
-msgid "Lock the rows read, so they can be changed after"
-msgstr "Блокувати прочитані рядки, щоб потім їх змінити"
-
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:226
 msgid "TempTable"
 msgstr "ТимчасоваТаблиця"
@@ -14686,6 +14771,10 @@ msgstr "Результат"
 #, c-format
 msgid "TempTable%u"
 msgstr "ТимчасоваТаблиця%u"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:495
+msgid "Lock"
+msgstr "Блокування"
 
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:483
 msgid "Virtual table parameters"
@@ -18639,3 +18728,80 @@ msgstr "Документ PDF"
 #: src/engine/backend/sheetFormat/sheetFormatPdf.cpp
 msgid "A PDF file cannot be written: no TrueType font was found, neither in the program's \"fonts\" folder nor among the system's fonts."
 msgstr "Файл PDF не записано: не знайдено жодного шрифту TrueType — ні в теці програми \"fonts\", ні серед шрифтів системи."
+
+#: src/engine/backend/query/lowering/queryLowering.cpp:5761
+msgid "a JOIN ON term that does not compare the two sides cannot be carried when a later RIGHT or FULL join pads this side with nulls: as a WHERE it would drop the padded rows. Put it inside the joined source instead (a subquery)"
+msgstr "умову JOIN ON, яка не порівнює дві сторони, не можна перенести, коли наступне з'єднання RIGHT або FULL доповнює цю сторону значеннями NULL: у WHERE вона відкинула б доповнені рядки. Помістіть її всередину приєднуваного джерела (вкладений запит)"
+
+#: src/engine/core/compiler/blockSyntaxLINQ.cpp:342
+#, c-format
+msgid "'%s' holds the query's one source: with a second source or a join, a query's LOCK says what it holds."
+msgstr "'%s' утримує єдине джерело запиту: за другого джерела або з'єднання те, що утримується, каже LOCK запиту."
+
+#: src/engine/core/compiler/blockSyntaxLINQ.cpp:842
+#, c-format
+msgid "'%s' is not written as the constructor reads it: once, after the source or its one key condition, before the groups."
+msgstr "'%s' записано не так, як його читає конструктор: один раз, після джерела або його єдиної умови-ключа, до груп."
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:479
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:510
+msgid "Data lock"
+msgstr "Блокування даних"
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:483
+#, c-format
+msgid "%s - hold the rows of the source before the first of them is read"
+msgstr "%s - утримувати рядки джерела до читання першого з них"
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:486
+#, c-format
+msgid "%s - other sessions may hold them too, to read; one that writes waits"
+msgstr "%s - інші сеанси теж можуть утримувати їх для читання; той, хто пише, чекає"
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:491
+msgid "Key:"
+msgstr "Ключ:"
+
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:499
+#, c-format
+msgid "The key is written as the '%s' right before the lock: a field equal to a value, several joined by 'and'; empty - the whole source. The conditions of the Conditions tab are written after it and only filter. A lock holds the query's one source - not beside a join or a second '%s' - until the transaction ends."
+msgstr "Ключ записується як '%s' безпосередньо перед блокуванням: поле, що дорівнює значенню, кілька - через 'and'; порожньо - усе джерело. Умови вкладки «Умови» записуються після нього і лише відбирають. Блокування утримує єдине джерело запиту - не поруч із з'єднанням чи другим '%s' - до кінця транзакції."
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:508
+msgid "Locked tables"
+msgstr "Таблиці, що блокуються"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:689
+#, c-format
+msgid "locks %s for reading"
+msgstr "блокує %s для читання"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:689
+#, c-format
+msgid "locks %s"
+msgstr "блокує %s"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:691
+#, c-format
+msgid "unlocks %s"
+msgstr "знімає блокування %s"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2553
+msgid "Lock data"
+msgstr "Заблокувати дані"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2554
+msgid "Unlock data"
+msgstr "Зняти блокування даних"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2579
+msgid "Other sessions may hold the same data to read it; one that writes waits"
+msgstr "Інші сеанси теж можуть утримувати ці дані для читання; той, хто пише, чекає"
+
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:288
+msgid "lock name"
+msgstr "ім'я блокування"
+
+#: src/engine/backend/metaCollection/partial/commonObjectRecordSetQuery.cpp:102
+msgid "LockForUpdate holds the set until the transaction ends, and no transaction is open: begin one before Read"
+msgstr "LockForUpdate утримує набір до кінця транзакції, а транзакцію не відкрито: почніть її перед Read"

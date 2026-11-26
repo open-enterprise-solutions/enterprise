@@ -202,13 +202,34 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 		return;
 
 	ibQueryAstStatement& statement = m_package.m_statements[m_statement];
-	if (!statement.m_select) {
-		statement.m_select = std::make_shared<ibQuerySelect>();
-		statement.m_select->m_selectAll = true;
+	// A LINK is a step with no query to change the kind of — a select given to it would be a second statement in
+	// the same place.
+	if (statement.IsLink())
+		return;
+	// ⭐ A LOCK HOLDS ITS QUERY ITSELF — the FROM, JOIN and WHERE it holds by (ibQueryAstLock::m_select) — so while
+	// the statement is one, its select is the lock's. Every kind below takes the query from where it is.
+	ibQuerySelectPtr& held = statement.IsLock() ? statement.m_lock->m_select : statement.m_select;
+	if (!held) {
+		held = std::make_shared<ibQuerySelect>();
+		held->m_selectAll = true;
 	}
+	const ibQuerySelectPtr query = held;
 
 	const int kind = m_queryKind->GetSelection();
 	wxString name = m_tempName->GetValue().Trim(true).Trim(false);
+
+	// ⚠ A NAME BELONGS TO ITS KIND — a temporary table's is not a lock's, and a lock's is not the one an UNLOCK
+	// below it lets go of. The box still holds the name of the kind the statement WAS; carried into a lock kind or
+	// out of one it is put aside, and the new kind proposes its own (a name the author typed differs, and stays).
+	const ibString was = statement.IsLock() ? statement.m_lock->m_name
+		: statement.IsUnlock() ? statement.m_unlock
+		: statement.IsDrop() ? statement.m_dropTemp
+		: !query->m_intoTemp.IsEmpty() ? query->m_intoTemp : query->m_ontoName;
+	const bool sameKind = (statement.IsLock() && kind == 4) || (statement.IsUnlock() && kind == 5);
+	if ((statement.IsLock() || statement.IsUnlock() || kind == 4 || kind == 5) && !sameKind && name == was)
+		name.clear();
+	// Into a lock or out of one, the catalogue changes too: a lock greys what it would be refused on (FillCatalogue).
+	const bool lockChanged = statement.IsLock() != (kind == 4);
 
 	// ⚠ THE KIND IS THE NAME, in this AST: a statement MAKES a temp table by having an `INTO`, and
 	// DROPS one by having a drop name. So picking a kind with the name box empty wrote nothing, the
@@ -228,6 +249,10 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 		name = SuggestTempTableName();
 	if (kind == 3 && (name.IsEmpty() || windowMintedTemp))
 		name = SuggestResultName();
+	// A LOCK PROPOSES ITS NAME AS IT BECOMES ONE (Max, 2026-11-26) — the name an UNLOCK below lets it go by. Emptied
+	// afterwards it stays a lock with none, held to the transaction's end: the language allows both.
+	if (kind == 4 && name.IsEmpty() && !statement.IsLock())
+		name = SuggestLockName();
 	if (kind == 2 && name.IsEmpty()) {
 		// A DROP names a table that already exists — so the proposal is the last one this package
 		// made before this statement, not a fresh name nobody created.
@@ -242,12 +267,50 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 		}
 		name = temps.back().Text();
 	}
+	// AN UNLOCK NAMES A LOCK — the last one this package named before it. With none, it is a lock an earlier query
+	// left with a TempDataManager, and its name is typed: the radio stays on the kind until it is.
+	if (kind == 5 && name.IsEmpty()) {
+		for (size_t i = m_statement; i-- > 0;) {
+			const ibQueryAstStatement& before = m_package.m_statements[i];
+			if (before.IsLock() && !before.m_lock->m_name.IsEmpty()) {
+				name = before.m_lock->m_name;
+				break;
+			}
+		}
+		if (name.IsEmpty()) {
+			if (!focusName) {
+				FillAll();   // the box was left empty: the statement stays what it was
+				return;
+			}
+			m_tempName->ChangeValue(wxEmptyString);
+			m_tempName->Enable();
+			m_tempName->SetFocus();
+			return;
+		}
+	}
 
 	// A TEMP TABLE'S NAME IS A NAME — the same gate as every other. It goes into the text after
-	// INTO / DROP, so a space in it is a query nothing can read.
-	if (kind != 0 && !AcceptName(name, kind == 3 ? _("result name") : _("temporary table name"))) {
+	// INTO / DROP / ONTO / LOCK / UNLOCK, so a space in it is a query nothing can read. (A lock may have none.)
+	const wxString what = kind == 3 ? _("result name") : kind >= 4 ? _("lock name") : _("temporary table name");
+	if (kind != 0 && !name.IsEmpty() && !AcceptName(name, what)) {
 		FillAll();   // put the controls back on what the statement actually is
 		return;
+	}
+
+	// A LOCK'S NAME SHARES THE TEMPORARY TABLES' — the package keeps both under one (the engine's own refusal).
+	if (kind == 4 && !name.IsEmpty()) {
+		for (size_t i = 0; i < m_package.m_statements.size(); ++i) {
+			const ibQueryAstStatement& other = m_package.m_statements[i];
+			if (i == m_statement)
+				continue;
+			if ((other.IsLock() && other.m_lock->m_name.IsSameAs(name, false))
+				|| (other.m_select != nullptr && !other.IsDrop() && other.m_select->m_intoTemp.IsSameAs(name, false))) {
+				ibMessageBox(ibString::Format(_("'%s' already names a temporary table or a lock"), name),
+					_("Query constructor"), wxOK | wxICON_WARNING, this);
+				FillAll();
+				return;
+			}
+		}
 	}
 
 	// A RESULT NAME IS UNIQUE IN ITS PACKAGE, checked as it is typed. Results are asked for BY NAME
@@ -270,26 +333,41 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 		}
 	}
 
+	// ⭐ A LOCK TAKES THE QUERY IN, every other kind takes it back out — the same select, so what is written in it
+	// (its fields too, kept behind the lock unwritten, as a query is behind a DROP) comes back with the kind.
+	if (kind == 4 && !statement.IsLock()) {
+		statement.m_lock = std::make_shared<ibQueryAstLock>();
+		statement.m_lock->m_select = query;
+		statement.m_select = nullptr;
+	}
+	else if (kind != 4 && statement.IsLock()) {
+		statement.m_select = query;
+		statement.m_lock = nullptr;
+	}
+
+	// One name per kind, so every other is cleared first.
+	statement.m_dropTemp.clear();
+	statement.m_unlock.clear();
+	query->m_intoTemp.clear();
+	query->m_ontoName.clear();
 	switch (kind) {
 	case 1:   // materialise the result under a name
-		statement.m_dropTemp.clear();
-		statement.m_select->m_ontoName.clear();   // a materialised statement hands back no result to name
-		statement.m_select->m_intoTemp = name;
+		query->m_intoTemp = name;
 		break;
 	case 2:   // drop a name made earlier — the query stays behind it, unrendered
-		statement.m_select->m_intoTemp.clear();
-		statement.m_select->m_ontoName.clear();
 		statement.m_dropTemp = name;
 		break;
 	case 3:   // the result comes back, under a name a reader can ask for
-		statement.m_dropTemp.clear();
-		statement.m_select->m_intoTemp.clear();
-		statement.m_select->m_ontoName = name;
+		query->m_ontoName = name;
+		break;
+	case 4:   // hold what its tables, links and conditions name — under a name an UNLOCK lets it go by, or none
+		statement.m_lock->m_name = name;
+		statement.m_lock->m_mode = m_lockShared->GetValue() ? ibQueryLockModeAst::Shared : ibQueryLockModeAst::Exclusive;
+		break;
+	case 5:   // let a lock go by its name — the query stays behind it, unrendered, as behind a DROP
+		statement.m_unlock = name;
 		break;
 	default:  // a plain select — no name means anything
-		statement.m_dropTemp.clear();
-		statement.m_select->m_intoTemp.clear();
-		statement.m_select->m_ontoName.clear();
 		break;
 	}
 
@@ -297,7 +375,7 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 	// not shown, so it has no order and no totals; only a temporary table has an index. Left behind,
 	// each was a clause the parser refuses — and the tab that could remove it is the one the new kind
 	// hides, so the query could not be put right from the window at all.
-	ibQuerySelect& select = *statement.m_select;
+	ibQuerySelect& select = *query;
 	const bool intoTemp = kind == 1;
 	const bool hadOrderOrTotals = intoTemp && (!select.m_orderBy.empty() || select.m_hasTotals);
 	if (intoTemp) {
@@ -318,14 +396,16 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 	// wxWindowUpdateLocker is on MSW) makes the switch one transition instead of a sequence.
 	{
 		wxWindowUpdateLocker hold(this);
+		if (lockChanged)
+			FillSourceTree();
 		FillAll();
 	}
 	Refresh();
 
-	// ⚠ AND NOT FillSourceTree(). The catalogue lists the temp tables declared BEFORE this statement
-	// — changing what THIS statement is cannot change that, so rebuilding the whole left tree here
-	// was pure repaint, and the most expensive one in the switch. It is rebuilt where it genuinely
-	// changes: adding, removing or moving a statement.
+	// ⚠ AND FillSourceTree() ONLY INTO OR OUT OF A LOCK. The catalogue lists the temp tables declared BEFORE this
+	// statement — changing what THIS statement is cannot change that, so rebuilding the whole left tree on every
+	// switch was pure repaint, and the most expensive one in it. It is rebuilt where it genuinely changes: adding,
+	// removing or moving a statement, and a lock's greying (lockChanged above).
 
 	// The name is the thing to correct now, so put the caret in it — but only when the RADIO was
 	// what changed (see OnQueryKindChanged).
@@ -335,44 +415,50 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 	}
 }
 
-// A NAME NOBODY IS USING. The counter runs over the temp tables this package already declares, so
-// two statements cannot propose the same one and quietly overwrite each other's table.
 // ⭐ A NAME MADE OF WHAT THE STATEMENT READS (Max): the main table plus what it joins — `Goods`,
 // `Goods_Prices_Balances`. Long, but it SAYS something; "Query2" says only that somebody pressed a
 // button twice, and a link written against it reads as noise.
 //
-// Uniqueness is added at the end, and only if it is needed: two statements over the same tables are
-// a legitimate thing to write.
-wxString ibDialogQueryConstructor::SuggestResultName() const
+// Each source by what the author calls it, as the language can carry it — the gate every typed name goes
+// through applies here too, so anything the lexer would refuse is dropped rather than smuggled in. `fallback`
+// when they make none, and before one a digit would start.
+static wxString ibNameOfSources(const ibQuerySelectPtr& select, const wxString& fallback)
 {
-	const ibQuerySelectPtr select = Current();
-	if (select == nullptr)
-		return _("Result");
-
 	auto leafOf = [](const ibQuerySource& source) -> wxString {
 		if (!source.m_alias.IsEmpty())
 			return source.m_alias;                       // what the author already calls it
 		return source.m_name.empty() ? ibString() : source.m_name.back();
 	};
 
-	wxString name = leafOf(select->m_from);
-	for (const ibQueryAstJoin& join : select->m_joins) {
-		const wxString part = leafOf(join.m_source);
-		if (part.IsEmpty())
-			continue;
-		name += (name.IsEmpty() ? wxString() : wxString(wxT("_"))) + part;
+	wxString name;
+	if (select != nullptr) {
+		name = leafOf(select->m_from);
+		for (const ibQueryAstJoin& join : select->m_joins) {
+			const wxString part = leafOf(join.m_source);
+			if (part.IsEmpty())
+				continue;
+			name += (name.IsEmpty() ? wxString() : wxString(wxT("_"))) + part;
+		}
 	}
-	if (name.IsEmpty())
-		name = _("Result");
 
-	// The gate every typed name goes through applies here too — a proposal that the language cannot
-	// carry is not a proposal. Anything the lexer would refuse is dropped rather than smuggled in.
 	wxString cleaned;
 	for (const wxUniChar ch : name)
 		if (wxIsalnum(ch) || ch == wxT('_'))
 			cleaned += ch;
 	if (cleaned.IsEmpty() || wxIsdigit(cleaned[0]))
-		cleaned = wxString(wxT("R")) + cleaned;
+		cleaned = fallback + cleaned;
+	// …and a WORD OF THE LANGUAGE is no name either (`Lock` — a lock over nothing yet — `Order`): numbered, as a
+	// temporary table's is, so what is proposed passes the gate a typed name passes (AcceptName).
+	if (!ibQueryLexer::IsIdentifier(cleaned))
+		cleaned += wxT("1");
+	return cleaned;
+}
+
+// Uniqueness is added at the end, and only if it is needed: two statements over the same tables are
+// a legitimate thing to write.
+wxString ibDialogQueryConstructor::SuggestResultName() const
+{
+	const wxString cleaned = ibNameOfSources(Current(), _("Result"));
 
 	auto taken = [this](const wxString& candidate) {
 		for (size_t i = 0; i < m_package.m_statements.size(); ++i) {
@@ -393,6 +479,8 @@ wxString ibDialogQueryConstructor::SuggestResultName() const
 	}
 }
 
+// A NAME NOBODY IS USING. The counter runs over the temp tables this package already declares, so
+// two statements cannot propose the same one and quietly overwrite each other's table.
 wxString ibDialogQueryConstructor::SuggestTempTableName() const
 {
 	auto taken = [this](const wxString& candidate) {
@@ -407,6 +495,33 @@ wxString ibDialogQueryConstructor::SuggestTempTableName() const
 
 	for (unsigned int n = 1; ; ++n) {
 		const wxString candidate = ibString::Format(_("TempTable%u"), n);
+		if (!taken(candidate))
+			return candidate;
+	}
+}
+
+// A lock's name, made of what it holds as a result's is of what it reads — `UNLOCK Stock` says what it lets go. Free
+// among the temporary tables' names as well as the locks': the package keeps both under one (ApplyQueryKind's gate).
+wxString ibDialogQueryConstructor::SuggestLockName() const
+{
+	const wxString cleaned = ibNameOfSources(Current(), _("Lock"));
+
+	auto taken = [this](const wxString& candidate) {
+		for (size_t i = 0; i < m_package.m_statements.size(); ++i) {
+			if (i == m_statement)
+				continue;
+			const ibQueryAstStatement& statement = m_package.m_statements[i];
+			if (statement.IsLock() && statement.m_lock->m_name.IsSameAs(candidate, false))
+				return true;
+			if (statement.m_select != nullptr && !statement.IsDrop() && statement.m_select->m_intoTemp.IsSameAs(candidate, false))
+				return true;
+		}
+		return false;
+	};
+	if (!taken(cleaned))
+		return cleaned;
+	for (unsigned int n = 2; ; ++n) {
+		const wxString candidate = cleaned + wxString::Format(wxT("%u"), n);
 		if (!taken(candidate))
 			return candidate;
 	}
@@ -3399,12 +3514,8 @@ void ibDialogQueryConstructor::OnCopyUnionBranch(wxCommandEvent&)
 	// in the middle of the union, and the engine stopped at the first of them —
 	//     Query syntax error at line 56: unexpected text after the query
 	// — over a query the author had done nothing to but press Copy.
-	//
-	// FOR UPDATE goes for the same reason: it is a lock over the statement's result, not over one
-	// branch's rows.
 	copy->m_orderBy.clear();
 	ibQueryDropTotals(*copy);
-	copy->m_forUpdate = false;
 	select->m_unions.push_back(copy);
 	FillAll();
 }
@@ -3505,7 +3616,6 @@ void ibDialogQueryConstructor::OnAdvancedChanged(wxCommandEvent&)
 
 	select->m_distinct  = m_distinct->GetValue();
 	select->m_allowed   = m_allowed->GetValue();
-	select->m_forUpdate = m_forUpdate->GetValue();
 	select->m_top       = m_useTop->GetValue() ? m_topCount->GetValue() : 0;
 
 	m_topCount->Enable(m_useTop->GetValue());

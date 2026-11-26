@@ -46,9 +46,12 @@ enum class ibAccessStage { Table, Value };
 #include "queryRamTable.h"                                  // ibQueryRamTable — the raw flat snapshot Execute() returns (L2-free)
 #include "querySelectorTree.h"                              // ibSelectorTree — the folded node tree SelectTotals returns (L2-free)
 
+#include "backend/lock/lockTypes.h"                         // ibLockMode — how a read or a write holds what it touches (WithLock)
+
 #include <vector>
 #include <utility>
 #include <memory>
+#include <optional>
 #include <functional>   // the detach callback — see ibDataQueryResult::DetachColumns
 
 class ibDatabaseConnectionHolder;
@@ -772,6 +775,7 @@ struct ibDataQuerySpec
 	// …by THESE output columns (empty = the whole row). See ibDataQueryBuilder::Distinct.
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_distinctBy;
 	long                                            m_topCount    = 0;         // .Top() — aggregate-terminal row limit (0 = all groups)
+	std::optional<ibLockMode>                       m_lock;                    // .WithLock() — what it touches held, how (none = nothing)
 };
 
 class BACKEND_API ibDataQueryBuilder
@@ -1277,6 +1281,10 @@ public:
 	// Pass nullptr for a TRUSTED / internal read that must bypass enforcement — e.g.
 	// a policy's own set-computation query (this is what dissolves re-entrancy).
 	ibDataQueryBuilder& WithAccessPolicy(const ibAccessPolicy* policy) { m_policy = policy; return *this; }
+	// Hold what this read or write touches, in `mode`, until the transaction it runs in ends — a read the values its
+	// conditions name, a write each row it writes, a delete each row it deletes. The caller says how; how it is held is
+	// the source's provider's (ExecuteLock). Outside a transaction nothing is held: a statement is whole by itself.
+	ibDataQueryBuilder& WithLock(ibLockMode mode) { m_spec.m_lock = mode; return *this; }
 	// Aggregate-shape introspection — an AGGREGATE subquery (FROM (SELECT …, SUM(x) … GROUP BY …))
 	// derives its exposed columns from these: the GROUP BY keys + one synthetic column per aggregate
 	// alias; its ComputeRows runs SelectAggregate instead of a plain read. (docs §23 — agg subquery)
@@ -1299,6 +1307,10 @@ public:
 	bool Upsert() const;
 	bool Update() const;
 	bool Delete() const;
+	// A LOCK's keys over the source, held its provider's way (ExecuteLock): with WithLock the transaction its statements
+	// run in keeps them, refused when none is open; without, what comes back is the keeper's (a TempDataManager). Null:
+	// the source holds nothing another session writes (a temporary table). It reads no row: no policy asks.
+	std::shared_ptr<void> Lock(const std::vector<ibLockItem>& keys) const;
 
 	// A key-only rewrite that touched no row missed its key — raise. A narrowed one (.Where) may
 	// legitimately match nothing and stays quiet. See the body for the case that made this necessary.

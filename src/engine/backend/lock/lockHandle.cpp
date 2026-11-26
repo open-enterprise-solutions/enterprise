@@ -21,7 +21,7 @@ ibLockHandle& ibLockHandle::operator=(ibLockHandle&& other) noexcept
 {
 	if (this != &other) {
 		// Release whatever rows we currently own before adopting the
-		// other handle's rows — avoids leaking sys_lock rows when a
+		// other handle's rows — avoids leaking lock rows when a
 		// caller re-assigns into a non-empty handle.
 		Release();
 		m_lockGuids   = std::move(other.m_lockGuids);

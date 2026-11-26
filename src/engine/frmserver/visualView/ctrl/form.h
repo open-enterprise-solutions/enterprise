@@ -61,7 +61,7 @@ public:
 	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	// Soft-lock state. m_lockBadgeHolder holds the blocking user's name
-	// when TryAcquireFormLock conflicted on open; empty means the form
+	// when the source's TryLock conflicted on open; empty means the form
 	// is editable normally. UI consumers (future lock-icon overlay /
 	// status bar) read GetLockBadgeHolder to decide whether to render
 	// the badge - title decoration was tried and rolled back as too

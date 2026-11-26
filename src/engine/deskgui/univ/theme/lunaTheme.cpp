@@ -1411,6 +1411,7 @@ protected:
 			{ wxART_FRONTEND, wxART_UNIONS, s_unions_svg },
 			{ wxART_FRONTEND, wxART_INDEX, s_index_svg },
 			{ wxART_FRONTEND, wxART_QUERY_BATCH, s_queryBatch_svg },
+			{ wxART_FRONTEND, wxART_DATA_LOCK, s_dataLock_svg },
 			{ wxART_FRONTEND, wxART_FORMAT_CONSTRUCTOR, s_formatConstructor_svg },
 			{ wxART_FRONTEND, wxART_LINQ_CONSTRUCTOR, s_linqConstructor_svg },
 			{ wxART_DEBUG, wxART_BREAKPOINT_CONDITION, s_breakpointCondition_svg },

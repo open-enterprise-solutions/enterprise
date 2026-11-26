@@ -514,6 +514,31 @@ TEST(NumberCompare, DecimalsOfDifferentPlaces) {
     EXPECT_GT(ibNumber(ibString(wxT("-0.001"))), ibNumber(-1));
 }
 
+// A number hashes by its value, as Compare reads it: the spellings of one value share a hash, two values do not —
+// the fraction included, which a hash by the integer part threw away.
+TEST(NumberHash, OneValueOneHash) {
+    EXPECT_EQ(ibNumber(1).GetHash(), ibNumber(ibString(ibT("1.00"))).GetHash());
+    EXPECT_EQ(ibNumber(150).GetHash(), ibNumber(ibString(ibT("150.0"))).GetHash());
+    EXPECT_EQ(ibNumber(ibString(ibT("2.50"))).GetHash(), ibNumber(ibString(ibT("2.5"))).GetHash());
+    EXPECT_EQ(ibNumber(0).GetHash(), ibNumber(ibString(ibT("-0.000"))).GetHash());
+    EXPECT_NE(ibNumber(ibString(ibT("1.5"))).GetHash(), ibNumber(ibString(ibT("1.7"))).GetHash());
+    EXPECT_NE(ibNumber(1).GetHash(), ibNumber(ibString(ibT("1.5"))).GetHash());
+    EXPECT_NE(ibNumber(15).GetHash(), ibNumber(ibString(ibT("1.5"))).GetHash());
+    EXPECT_NE(ibNumber(1).GetHash(), ibNumber(-1).GetHash());
+}
+
+// …whichever tier holds it: a heap number hashes as the immediate one of its value, and two heap spellings meet.
+TEST(NumberHash, TheHeapTierHashesAsItsValue) {
+    const ibNumber one(ibString(ibT("1.0000000000000000000000")));   // 10^22 × 10^-22 — past the immediate tier
+    ASSERT_TRUE(one.IsHeap());
+    EXPECT_EQ(one.GetHash(), ibNumber(1).GetHash());
+
+    const ibNumber big(ibString(ibT("1000000000000000"))), bigSpelled(ibString(ibT("1000000000000000.000")));
+    ASSERT_TRUE(big.IsHeap());
+    EXPECT_EQ(big.GetHash(), bigSpelled.GetHash());
+    EXPECT_NE(big.GetHash(), ibNumber(ibString(ibT("1000000000000001"))).GetHash());
+}
+
 // ===========================================================================
 // Rounding
 // ===========================================================================

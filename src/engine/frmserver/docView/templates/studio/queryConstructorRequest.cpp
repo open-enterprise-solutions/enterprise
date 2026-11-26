@@ -58,6 +58,8 @@ void WriteSources(ibDataNode& response, const ibQueryConstructorModel& model)
 			row.SetValue(qc::Reference, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(reference)));
 		if (source.m_platform)
 			row.SetValue(qc::Platform, true);
+		if (source.m_lockable)
+			row.SetValue(qc::Lockable, true);
 	}
 }
 

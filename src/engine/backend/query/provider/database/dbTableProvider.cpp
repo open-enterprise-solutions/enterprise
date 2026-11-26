@@ -24,6 +24,7 @@
 #include "backend/query/queryHierarchy.h"   // ibQueryHierarchyScope — «in hierarchy» read here where the server cannot walk it
 #include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — a read's holder asked what its driver can do
 #include "backend/appData.h"                         // db_query — the driver in hand, where no read's holder is
+#include "backend/lock/lockManager.h"                // ExecuteLock — the base's lock manager holds a LOCK's keys
 
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
@@ -39,6 +40,7 @@
 
 #include <deque>          // ibDbResultSource — the field names it has found, where they stay put
 #include <map>            // dot-walk join dedup
+#include <set>            // a held write's keys, one each (ibHoldWrite)
 #include <unordered_map>  // ROLLUP node index — keyed by the group values themselves
 #include <unordered_set>  // ibArrivedReferences — one entry per reference object; an id bound once (DecomposeIn)
 #include <string>         // …keyed by its bytes
@@ -2655,6 +2657,108 @@ static void RequireOneSource(const ibDataQuerySpec& spec)
 			_("a join or a union is read as the source it composes, never handed to a table's read as a tree"));
 }
 
+// ⭐⭐ WHAT A READ OR A WRITE ASKED TO HOLD (the door's WithLock), held by the transaction its statement runs in — the
+// caller says how, the machinery is ExecuteLock (beside ExecuteWrite). A key names a row's fields as a query names
+// them, so a write and a `LOCK … WHERE Item = &I` meet on the same words; a column no query names (a raw row key) keys
+// nothing, which only makes a key coarser. Outside a transaction nothing is held — a statement is whole by itself —
+// nor where the open transaction is the lock itself (SQLite): both asked of the connection the statement runs on.
+static constexpr size_t kLockRows = 1000;   // past it, one key: the fields every row agrees on — a record set's filter
+
+static bool ibHoldsForTransaction(const ibDataQuerySpec& spec)
+{
+	ibConnectionScope scope(spec.m_holder);
+	return scope && scope->IsActiveTransaction() && !scope->GetDialect().m_rowLockSuffix.IsEmpty();
+}
+
+static bool ibIsLockField(const ibBackendQueryable& queryable, const std::shared_ptr<const ibBackendQueryColumn>& column)
+{
+	return column != nullptr && queryable.ResolveColumnByName(column->GetName()) != nullptr;
+}
+
+static void ibHoldKeys(ibDbTableProvider& provider, const ibDataQuerySpec& spec, std::vector<ibLockItem> keys)
+{
+	if (keys.size() > kLockRows) {
+		ibLockItem common = ibLockItem::ForNamespace(ibEmptyString, *spec.m_lock);
+		for (const auto& field : keys.front().keyFields) {
+			const bool agreed = std::all_of(keys.begin(), keys.end(), [&field](const ibLockItem& key) {
+				return std::any_of(key.keyFields.begin(), key.keyFields.end(), [&field](const auto& other) {
+					return other.first == field.first && other.second.CompareValueEQ(field.second);
+				});
+			});
+			if (agreed)
+				common.keyFields.push_back(field);
+		}
+		keys = { std::move(common) };
+	}
+	provider.ExecuteLock(spec, keys);   // the spec's WithLock: the provider gives the hold to the transaction itself
+}
+
+// A read: the values its conditions tie a field to. None tie one — the whole table.
+static void ibHoldRead(ibDbTableProvider& provider, const ibDataQuerySpec& spec)
+{
+	// A read held exclusively is held for a change (a record set's LockForUpdate): outside a transaction nothing would
+	// hold it, and it is refused rather than read unheld.
+	if (*spec.m_lock == ibLockMode::Exclusive)
+		if (ibConnectionScope scope(spec.m_holder); !scope || !scope->IsActiveTransaction())
+			ibBackendCoreException::Error(_("LockForUpdate holds the set until the transaction ends, and no transaction is "
+			                                "open: begin one before Read"));
+	if (!ibHoldsForTransaction(spec))
+		return;
+	ibLockItem key = ibLockItem::ForNamespace(ibEmptyString, *spec.m_lock);
+	for (const ibQueryCondition& condition : spec.m_conditions)
+		if (condition.m_op == ibQueryFilterOp::Equal && condition.m_path.empty()
+			&& ibIsLockField(*spec.m_queryable, condition.m_col))
+			key.keyFields.emplace_back(condition.m_col->GetName(), condition.m_value);
+	ibHoldKeys(provider, spec, { std::move(key) });
+}
+
+// A write: each row it writes, by the fields it writes. A delete: each row it deletes, read first — past kLockRows of
+// them, what its conditions tie (a record set's filter), as a read holds.
+static void ibHoldWrite(ibDbTableProvider& provider, const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind)
+{
+	if (!ibHoldsForTransaction(spec))
+		return;
+	const ibLockMode mode = *spec.m_lock;
+	std::vector<ibLockItem> keys;
+	std::set<ibString> taken;   // one key once, however many rows share it
+	const auto take = [&keys, &taken](ibLockItem key) {
+		if (taken.insert(key.KeyData()).second)
+			keys.push_back(std::move(key));
+	};
+
+	if (kind == ibDataQueryBuilder::WriteKind::Delete) {
+		ibDataQuerySpec rows = spec;
+		rows.m_lock.reset();   // the read only finds the rows: its own hold would be the coarse one
+		ibReadPageRequest page;
+		page.m_count = 0;      // every matching row
+		ibDataQueryResult selection = provider.ExecuteRead(rows, page);
+		const auto columns = spec.m_queryable->GetQueryColumns();
+		size_t read = 0;
+		while (selection.Next()) {
+			if (++read > kLockRows) {
+				ibHoldRead(provider, spec);
+				return;
+			}
+			ibLockItem key = ibLockItem::ForNamespace(ibEmptyString, mode);
+			for (const std::shared_ptr<const ibBackendQueryColumn>& column : columns)
+				if (column != nullptr)
+					key.keyFields.emplace_back(column->GetName(), selection.GetValue(column));
+			take(std::move(key));
+		}
+	}
+	else {
+		for (const ibWriteRow& row : spec.m_writeRows) {
+			ibLockItem key = ibLockItem::ForNamespace(ibEmptyString, mode);
+			for (const auto& [column, value] : row)
+				if (ibIsLockField(*spec.m_queryable, column))
+					key.keyFields.emplace_back(column->GetName(), value);
+			take(std::move(key));
+		}
+	}
+	if (!keys.empty())
+		ibHoldKeys(provider, spec, std::move(keys));
+}
+
 // ==========================================================================
 // ibDbTableProvider — the real-table engine. STATELESS: every method reads the
 // ibDataQuerySpec the door hands it. It owns the name-substitution lowering and runs
@@ -2663,6 +2767,8 @@ static void RequireOneSource(const ibDataQuerySpec& spec)
 ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req)
 	{
 		RequireOneSource(spec);
+		if (spec.m_lock)
+			ibHoldRead(*this, spec);   // what the caller asked to hold — before the rows are read
 		const std::vector<ibQuerySortItem> effective =
 			ibDataQueryBuilder::EffectiveSort(spec.m_queryable, spec.m_sorts);
 		const std::vector<ibValue> external = BuildExternal(req, effective);
@@ -4967,6 +5073,63 @@ void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn& col, con
 // (A RAW COLUMN'S OWN READ AND BIND live in queryColumn.cpp, beside the defaults they override — what
 //  a column DOES is one file, and this one stays the provider.)
 
+// ⭐ A LOCK OVER A TABLE OF THE BASE — the keys in the base's lock manager, in the namespace of the metaobject behind
+// the source (its guid, GetDocPath: where a LOCK of the table, its record set's write and an object's own lock meet),
+// a refusal naming its synonym; a key another session holds is waited out for kLockWaitMs. A source no metaobject
+// stands behind (a session's temporary table on the server) holds nothing another session writes: null.
+//
+// A base whose transaction IS the lock (SQLite: one writer at a time, its open transaction holds the whole base — the
+// dialect has no row-lock clause) holds them by that transaction while one is open: the lock table, written on a
+// connection of its own, would wait for this transaction's own write until it timed out. With none open — a
+// TempDataManager holding a LOCK — the lock manager holds them there too. Asked for the transaction to keep (the
+// door's WithLock), the provider gives it the hold itself and refuses when none is open — before a key is waited for.
+// All of it asked of the connection the spec's statements run on, as a write's hold asks it (ibHoldsForTransaction):
+// the session's, where a script's transaction is.
+bool ibDbTableProvider::CanLock(const std::shared_ptr<const ibBackendQueryable>& queryable) const
+{
+	return queryable != nullptr && queryable->GetSourceMetaObject() != nullptr;
+}
+
+std::shared_ptr<void> ibDbTableProvider::ExecuteLock(const ibDataQuerySpec& spec, const std::vector<ibLockItem>& keys)
+{
+	const std::shared_ptr<const ibBackendQueryable>& queryable = spec.m_queryable;
+	if (!CanLock(queryable))
+		return nullptr;
+	const ibValueMetaObjectGenericData* const meta = queryable->GetSourceMetaObject();
+	// Asked, and the connection let go, before any wait: a key waited out holds none of the pool.
+	bool inTransaction = false, transactionIsTheLock = false;
+	if (ibConnectionScope scope(spec.m_holder); scope) {
+		inTransaction        = scope->IsActiveTransaction();
+		transactionIsTheLock = inTransaction && scope->GetDialect().m_rowLockSuffix.IsEmpty();
+	}
+	if (spec.m_lock && !inTransaction)
+		ibBackendCoreException::Error(_("LOCK holds until the transaction ends, and no transaction is open: begin one "
+			"before the query that locks, or hand the query a TempDataManager to hold it"));
+	if (transactionIsTheLock)
+		return std::make_shared<ibLockHandle>();   // holds nothing: the transaction does
+	ibLockManager* const manager = ibApplicationInstance::GetLockManager();
+	if (manager == nullptr)
+		ibBackendCoreException::Error(_("Lock manager not initialised"));
+
+	std::vector<ibLockItem> items = keys;
+	for (ibLockItem& item : items) {
+		item.namespaceName = meta->GetDocPath();
+		item.objectName    = meta->GetSynonym();
+		// ⭐ A KEY IS THE VALUE AS ITS FIELD HOLDS IT — brought to the field's type as a written value is when it is set
+		// (a number rounded to the field's scale): a LOCK's `Price = &P` with more digits than the field, or of another
+		// kind, keyed apart from the row a writer of it holds. A field no column of the table is named by keys as given.
+		for (auto& [name, value] : item.keyFields)
+			if (const std::shared_ptr<const ibBackendQueryColumn> column = queryable->ResolveColumnByName(name))
+				value = ibValueTypeDescription::AdjustValue(column->GetTypeDesc(), std::move(value), queryable->GetMetaData());
+	}
+	ibLockOptions options;
+	options.timeoutMs = kLockWaitMs;
+	const std::shared_ptr<ibTransactionTicket> ticket = std::make_shared<ibLockHandle>(manager->Acquire(items, options));
+	if (spec.m_lock)
+		ibConnectionScope(spec.m_holder)->AddTicket(ticket);
+	return ticket;
+}
+
 // The L2-1 write CORE — buried in the provider. Identity is the WHERE section (spec conditions):
 // each condition column (a RAW uuid column, or a register's primary-key attribute) = value.
 // The SetValue() data rides ONLY for INSERT / UPSERT; DELETE is WHERE-only. INSERT/UPSERT write
@@ -4979,6 +5142,9 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		using WriteKind = ibDataQueryBuilder::WriteKind;
 		const ibString table     = spec.m_queryable->GetQueryTableName();
 		const ibMetaData* metaData = spec.m_queryable->GetMetaData();   // context for the column-based field spread / bind
+
+		if (spec.m_lock)
+			ibHoldWrite(*this, spec, kind);   // what the caller asked to hold — before the rows change
 
 		if (kind == WriteKind::Delete) {
 			// DELETE ... WHERE <row-key conditions> AND <folded RLS predicate>. BuildWhere lowers BOTH

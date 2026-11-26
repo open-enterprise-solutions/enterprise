@@ -248,6 +248,7 @@ add_executable(oes_tests
     test_mcpAppApply.cpp
     test_mcpCodeRunDebug.cpp
     test_lockRace.cpp
+    test_sharedFile.cpp
     test_clientListener.cpp
 )
 
@@ -746,7 +747,7 @@ oes_discover_tests(oes_client_test)
 # the layer is absent and the target would not link.
 # ---------------------------------------------------------------------------
 if(OES_USE_POSTGRESQL)
-    add_executable(oes_pg_dialect_test test_postgresDialect.cpp test_lockRace.cpp)
+    add_executable(oes_pg_dialect_test test_postgresDialect.cpp)
 
     target_link_libraries(oes_pg_dialect_test
         PRIVATE
@@ -756,7 +757,7 @@ if(OES_USE_POSTGRESQL)
             GTest::gtest_main
     )
 
-    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING OES_LOCK_RACE_POSTGRES_ONLY)
+    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING)
 
     target_include_directories(oes_pg_dialect_test PRIVATE
         "${CMAKE_SOURCE_DIR}/src"

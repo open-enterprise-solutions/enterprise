@@ -122,10 +122,10 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsProc(const long lM
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods))
 	{
 	case Func::enLock:
-		TryAcquireFormLock();
+		TryLock();
 		return true;
 	case Func::enUnlock:
-		ReleaseFormLock();
+		Unlock();
 		return true;
 	}
 

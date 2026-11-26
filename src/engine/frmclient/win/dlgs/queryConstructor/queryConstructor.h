@@ -99,6 +99,9 @@ enum ibQueryConstructorExclude {
 	// Fields page, so the "Role..." button is not offered and a role the text already says is dropped
 	// (Max, 2026-09-29: "otherwise it is a duplicate").
 	ibQueryExclude_Roles      = 1 << 10,
+	// Not a tab but two KINDS of statement: a LOCK and an UNLOCK. A host whose read has no end to hold a lock until (a
+	// dynamic list, read a page at a time while it is open) leaves them out; a composition's run holds its own.
+	ibQueryExclude_Locks      = 1 << 11,
 };
 
 class FRMCLIENT_API ibDialogQueryConstructor : public ibDialog
@@ -132,10 +135,10 @@ public:
 	wxString GetText() const;
 
 	// EDITING A SUB-QUERY, not a statement. A nested table and a union branch are queries standing
-	// INSIDE another one, so the words that belong to a statement — INTO (which materialises a
-	// package's temp table) and FOR UPDATE (which holds a statement's rows) — are not theirs to
-	// write, and the package strip has nothing to show. The parser refuses both inside a source, so
-	// leaving the controls on would let somebody build text their own engine then rejects.
+	// INSIDE another one, so the word that belongs to a statement — INTO, which materialises a
+	// package's temp table — is not theirs to write, and the package strip has nothing to show. The
+	// parser refuses it inside a source, so leaving the control on would let somebody build text
+	// their own engine then rejects.
 	void SetSubQueryMode();
 
 private:
@@ -187,6 +190,12 @@ private:
 		// LAST on purpose: every existing row of the table below stops at the exclusion bit, and a
 		// flag slotted in the middle would silently re-read that bit as this one.
 		bool      m_needsNamedResults = false;
+		// …and a tab a LOCK has no use for (Max, 2026-11-26): a lock holds tables, how they join and which rows —
+		// it selects no fields, so it neither groups, orders, totals nor unites them. After the flag above, for the
+		// same reason.
+		bool      m_refusedByLock = false;
+		// The caption a LOCK gives this tab — the first one is "Locked tables" there; empty: the same as m_title.
+		wxString  m_lockTitle;
 	};
 	std::vector<Page> m_pages;
 	void SyncNotebookPages();   // the tab set follows what the current statement IS
@@ -235,7 +244,7 @@ private:
 	// union branch chosen on the Unions tab. Everything below reads and writes through here, which
 	// is what makes the same window work one level down over a nested table.
 	ibQuerySelectPtr Current() const;
-	// The STATEMENT's own select — what owns the union branches, the INTO, the FOR UPDATE. Distinct
+	// The STATEMENT's own select — what owns the union branches and the INTO. Distinct
 	// from Current(), which is the BRANCH the tabs are showing when one is picked on the strip.
 	ibQuerySelectPtr StatementSelect() const;
 
@@ -280,6 +289,8 @@ private:
 	// what it joins. Readable by construction, which "Query2" is not — and a link written against a
 	// readable name says what it links.
 	wxString SuggestResultName() const;
+	// A LOCK's name, made the same way and free among the temporary tables' and the locks' — one namespace.
+	wxString SuggestLockName() const;
 	void OnMoveStatement(int delta);
 	void OnStatementSelected(class ibDataViewEvent&);
 	void OnBranchSelected(wxBookCtrlEvent&);   // the union-branch tabs down the right edge
@@ -734,16 +745,17 @@ private:
 
 	ibCheckBox*  m_distinct   = nullptr;
 	ibCheckBox*  m_allowed    = nullptr;
-	ibCheckBox*  m_forUpdate  = nullptr;
 	ibCheckBox*  m_useTop     = nullptr;
 	ibSpinCtrl*  m_topCount   = nullptr;
 
-	// WHAT THIS STATEMENT IS — a select, a select that materialises a temp table, or a drop of one.
-	// A KIND, not a checkbox: the three are different statements, and the name is asked because the
+	// WHAT THIS STATEMENT IS — a select, a select that materialises a temp table, or a drop of one;
+	// a select under a name; a lock of data, or an unlock of one.
+	// A KIND, not a checkbox: the six are different statements, and the name is asked because the
 	// kind asks for it, not because a flag was ticked. It lives on the package strip rather than on
 	// a tab because it says what the statement IS, while the tabs say what its query SELECTS.
 	class ibRadioBox* m_queryKind = nullptr;
 	ibTextCtrl*  m_tempName   = nullptr;
+	ibCheckBox*  m_lockShared = nullptr;   // the Lock kind's LOCK SHARED
 };
 
 // Open the constructor over query TEXT (a package). Returns true on OK, with `queryText` replaced

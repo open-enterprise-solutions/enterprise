@@ -621,7 +621,7 @@ void ibValueRecordSetObjectAccountingRegister::FillMembers(ibMemberTable& helper
 
 bool ibValueRecordSetObjectAccountingRegister::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	return false;
+	return ibValueRecordSetObject::SetPropVal(lPropNum, varPropVal);   // the set's own (LockForUpdate) — the base's
 }
 
 bool ibValueRecordSetObjectAccountingRegister::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

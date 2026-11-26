@@ -6,8 +6,8 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // queryLowering.h is the lowering's face to every caller; this is how its own files — the translation
-// (queryLowering.cpp), the name check (queryNameCheck.cpp) and the package (queryPackage.cpp) — speak to one
-// another, and nothing here reaches the face. The same shape as dataComposerInternal.h. The names were
+// (queryLowering.cpp), the name check (queryNameCheck.cpp), the package (queryPackage.cpp) and its lock
+// (queryLock.cpp) — speak to one another, and nothing here reaches the face. The same shape as dataComposerInternal.h. The names were
 // file-local and stay as they were, so they live in a namespace of their own: another file of the engine
 // says ibNoCaseLess too.
 
@@ -106,6 +106,12 @@ void CheckIndexNamesOutputs(const ibQuerySelect& ast);
 
 // The package's (queryPackage.cpp), asked by the translation — a finished selection drained into a snapshot.
 ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result, const std::vector<ibQueryOutputColumn>& schema);
+
+// The package's LOCK (queryLock.cpp) — the facade, whole: the keys of the tables it names, each held by its table's
+// provider, kept in `temps` under the LOCK's name, and held by `manager` alone when the package was handed one, else
+// by the transaction. Answers how many keys it holds.
+long ExecuteLock(const ibQueryAstLock& lock, const std::map<ibString, ibValue>& params, ibQueryTempDataStore& temps,
+                 const class ibQueryTempDataStore* manager);
 
 } // namespace ibLowering
 

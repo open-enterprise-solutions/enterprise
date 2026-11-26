@@ -9,7 +9,7 @@
 #include "core/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
-#include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
+#include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempDataManager is told, not ignored
 #include "backend/session/session.h"     // ibSession::Current — the session knows WHICH application it was opened for
 #include "backend/moduleManager/moduleManager.h"  // GetMetaManager()->GetMetaData() — that application, held
 
@@ -63,27 +63,28 @@ void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	// ONTO still names a selection; what reads that name is LINK, inside the package text.
 	helper.AppendFunc(ibT("Execute"), ibT("Execute()"));
 	helper.AppendFunc(ibT("ExecuteBatch"), ibT("ExecuteBatch()"));
-	// WHERE this query's temp tables live. Left unset they die with the execution; set to a
-	// TempTablesManager they outlive it and other queries attached to the same manager read them.
-	helper.AppendProp(ibT("TempTablesManager"), true, true, ibValueQueryExec::enPropTempTablesManager);
+	// WHERE this query's temp tables and locks live. Left unset the tables die with the execution and the
+	// locks with the transaction; set to a TempDataManager both outlive them, held by the manager, and other
+	// queries attached to the same manager read the tables and DROP the locks by name.
+	helper.AppendProp(ibT("TempDataManager"), true, true, ibValueQueryExec::enPropTempDataManager);
 	// The text the query was made with (`New Query(text)`), to read back: a script edits it and makes a new query
 	// (`New Query(StrReplace(Q.Text, ...))`). Read-only - the text is parsed once, in the constructor.
 	helper.AppendProp(ibT("Text"), true, false, ibValueQueryExec::enPropText);
 }
 
 //////////////////////////////////////////////////////////////////////
-// ibValueTempTablesManager — script "TempTablesManager"
+// ibValueTempDataManager — script "TempDataManager"
 //////////////////////////////////////////////////////////////////////
 
-void ibValueTempTablesManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
+void ibValueTempDataManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendConstructor(0, ibT("TempTablesManager()"));
-	// ONE VERB, because there is one decision to make about a set of temp tables: keep them, or
-	// let them go. Everything else about them is said in the query text.
+	helper.AppendConstructor(0, ibT("TempDataManager()"));
+	// ONE VERB, because there is one decision to make about a set of temp tables and locks: keep them,
+	// or let them go. Everything else about them is said in the query text.
 	helper.AppendProc(ibT("Close"), ibT("Close()"));
 }
 
-bool ibValueTempTablesManager::CallAsProc(const long lMethodNum, ibValue** /*paParams*/, const long /*lSizeArray*/)
+bool ibValueTempDataManager::CallAsProc(const long lMethodNum, ibValue** /*paParams*/, const long /*lSizeArray*/)
 {
 	if (lMethodNum != enClose)
 		return false;
@@ -143,10 +144,10 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<ibStrin
 
 	// The manager, when one was given. Without it the store below is the package's own and the
 	// tables die with this call — which is the right default: a temp table nobody is keeping is a
-	// temp table nobody can accidentally read later.
-	ibValueTempTablesManager* manager = nullptr;
-	ibQueryTempTableStore* store = nullptr;
-	if (!m_tempTables.IsEmpty() && m_tempTables.ConvertToValue(manager) && manager != nullptr)
+	// temp table nobody can accidentally read later. (Its locks are then the transaction's.)
+	ibValueTempDataManager* manager = nullptr;
+	ibQueryTempDataStore* store = nullptr;
+	if (!m_tempData.IsEmpty() && m_tempData.ConvertToValue(manager) && manager != nullptr)
 		store = manager->GetStore();
 
 	// The application this query's by-name sources resolve against. An outer scope wins — a query run from
@@ -240,31 +241,31 @@ bool ibValueQueryExec::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		pvarPropVal = m_text;
 		return true;
 	}
-	if (lPropNum != enPropTempTablesManager)
+	if (lPropNum != enPropTempDataManager)
 		return false;
-	pvarPropVal = m_tempTables;
+	pvarPropVal = m_tempData;
 	return true;
 }
 
 bool ibValueQueryExec::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (lPropNum != enPropTempTablesManager)
+	if (lPropNum != enPropTempDataManager)
 		return false;
 
 	// Clearing it is meaningful and therefore allowed: the query goes back to owning its own
-	// temp tables for the length of one run.
+	// temp tables for the length of one run, and to locking for the length of a transaction.
 	if (varPropVal.IsEmpty()) {
-		m_tempTables = ibValue();
+		m_tempData = ibValue();
 		return true;
 	}
 
 	// Anything else must BE a manager. A query told to put its tables somewhere that cannot hold
 	// them would otherwise fail much later, at a statement that reads a name nothing filled.
-	ibValueTempTablesManager* manager = nullptr;
+	ibValueTempDataManager* manager = nullptr;
 	if (!varPropVal.ConvertToValue(manager) || manager == nullptr)
-		ibBackendCoreException::Error(_("TempTablesManager expects a TempTablesManager value"));
+		ibBackendCoreException::Error(_("TempDataManager expects a TempDataManager value"));
 
-	m_tempTables = varPropVal;
+	m_tempData = varPropVal;
 	return true;
 }
 
@@ -281,7 +282,7 @@ ibValueQueryResult::ibValueQueryResult()
 ibValueQueryResult::ibValueQueryResult(ibDataQueryResult&& result,
                                        std::vector<ibQueryLowering::ibQueryOutputColumn> schema, bool hasTotals,
                                        std::shared_ptr<ibQueryReadState> snapshot,
-                                       std::shared_ptr<ibQueryTempTableStore> temps)
+                                       std::shared_ptr<ibQueryTempDataStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_result(std::make_unique<ibDataQueryResult>(std::move(result)))
 	, m_schema(std::move(schema))
@@ -377,7 +378,7 @@ ibValueQuerySelect::ibValueQuerySelect()
 ibValueQuerySelect::ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
                                        std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
                                        std::shared_ptr<ibQueryReadState> snapshot,
-                                       std::shared_ptr<ibQueryTempTableStore> temps)
+                                       std::shared_ptr<ibQueryTempDataStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_flat(std::move(flat))
 	, m_schema(std::move(schema))
@@ -390,7 +391,7 @@ ibValueQuerySelect::ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
 ibValueQuerySelect::ibValueQuerySelect(ibSelector&& tree,
                                        std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
                                        std::shared_ptr<ibQueryReadState> snapshot,
-                                       std::shared_ptr<ibQueryTempTableStore> temps)
+                                       std::shared_ptr<ibQueryTempDataStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
 	, m_tree(std::make_unique<ibSelector>(std::move(tree)))
 	, m_schema(std::move(schema))
@@ -526,9 +527,10 @@ bool ibValueQuerySelect::SetPropVal(const long /*lPropNum*/, const ibValue& /*va
 //**********************************************************************
 
 VALUE_TYPE_REGISTER(ibValueQueryExec, "Query", value_to_clsid("VL_QURY"));
-// CREATABLE (`New TempTablesManager()`) — it is a thing an author makes and holds, not something
-// the platform hands back, so it registers as a value type like Query does.
-VALUE_TYPE_REGISTER(ibValueTempTablesManager, "TempTablesManager", value_to_clsid("VL_TTMG"));
+// CREATABLE (`New TempDataManager()`) — it is a thing an author makes and holds, not something
+// the platform hands back, so it registers as a value type like Query does. (The key VL_TTMG is an
+// opaque body key, kept from the name it had.)
+VALUE_TYPE_REGISTER(ibValueTempDataManager, "TempDataManager", value_to_clsid("VL_TTMG"));
 SYSTEM_TYPE_REGISTER(ibValueQueryResult, "QueryResult", system_to_clsid("VL_QRES"));
 SYSTEM_TYPE_REGISTER(ibValueQuerySelect, "QuerySelect", system_to_clsid("VL_QSEL"));
 ENUM_TYPE_REGISTER(ibValueEnumQuerySelectKind, "QueryResultIteration", enum_to_clsid("EN_QSEL"));

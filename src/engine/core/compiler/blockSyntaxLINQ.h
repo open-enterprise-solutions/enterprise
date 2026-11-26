@@ -31,10 +31,11 @@
 #include <vector>
 
 // WHICH QUERY WORDS MAY BE WRITTEN after `lastKeyword` — the last query keyword before the place in
-// question (KEY_FROM … KEY_RESTRICT, codeDef.h), inside a query. After `From`/`Join` only `In`; after
+// question (KEY_FROM … KEY_SHARED, codeDef.h), inside a query. After `From`/`Join` only `In`; after
 // `On` only `Equals`; after `Group` only `By`; after `By` of a group only its `Into` - a group without
 // a name ends the query; after `Into` the clauses that read the groups; after `Select` only
-// `Distinct`; anywhere else the clauses: another `From` (a product), `Join`, `Where`, `Group`,
+// `Distinct`; after a source or a `Where` the clauses and `Lock`; after `Lock` the clauses that read the
+// same source; anywhere else the clauses: another `From` (a product), `Join`, `Where`, `Group`,
 // `OrderBy`, `Skip`, `Take`, `Select`. Modifiers are answered only where the grammar demands them, never
 // offered standalone.
 CORE_API std::vector<int> ibLinqClausesAfter(int lastKeyword);
@@ -91,6 +92,13 @@ public:
 	ibString                       m_take;
 	std::vector<ibLinqBlockField>  m_fields;           // none: `Select <first alias>`, the row itself
 	bool                           m_distinct = false;
+
+	// ⭐ THE BLOCK'S LOCK — `Lock [Shared]` (record-locks.md): the source held before its first row is read, keyed
+	// by the `Where` written RIGHT BEFORE it, `m_lockKey` (empty: the whole source). The conditions above are
+	// written after it and only filter. One source only: beside a join or a second `From` it is refused.
+	bool                           m_lock = false;
+	bool                           m_lockShared = false;   // …`Lock Shared`: others may hold the same values to read
+	ibString                       m_lockKey;
 
 	// ⭐ GROUPING (linq.md, GROUP BY). Rows with the same KEYS become one row of the answer. One key is
 	// written as it is (`By o.Customer`); several are made into one value (`By New Structure("Customer,

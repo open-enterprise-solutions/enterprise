@@ -35,7 +35,7 @@
 #include "backend/compiler/value.h"            // ibValue — driver rows / parameters
 #include "core/query/queryAST.h"        // ibQuerySelectPtr — the cached parse
 #include "backend/query/queryLowering.h"       // ibQueryLowering::ibQueryOutputColumn (+ ibBackendQueryColumn)
-#include "backend/query/queryTempStore.h"      // ibQueryTempTableStore — what the preparing statements made
+#include "backend/query/queryTempStore.h"      // ibQueryTempDataStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28
 #include "compositionCondition.h"                  // the evaluator — how a row in hand is read against a condition (SubtreeOf feeds it)
 #include "backend/backend_composition.h"       // ibFilterDescription — a level's filter is the stored one; ibStoredValue
@@ -724,6 +724,10 @@ public:
 	// live rows for the RAM one.
 	virtual bool RunOutput(const Output& /*output*/, ibCompositionDriver& /*driver*/) { return false; }
 
+	// LET GO OF WHAT THE RUN LOCKED — a LOCK in the package it prepared (the DB composer's store holds it, alone,
+	// from the prepare). Called when Run ends, returned or refused; a composer that prepares nothing holds nothing.
+	virtual void ForgetLocks() const {}
+
 	// (🗑️ BeginRun / EndRun stood here — "the run's own brackets", empty, overridden and called by nobody.)
 
 	// ⭐ RUN — load the outputs, then run ONCE and every driver gets filled (Max). Outputs are read
@@ -737,6 +741,14 @@ public:
 		// ONE VIEW OF THE FEATURE OPTIONS FOR THE WHOLE RUN — what every output asks (IsAvailable) is
 		// answered as the application answers it, and in the studio from one reading of the base.
 		const ibFeatureOptionGate::AsApplication asTheApplication;
+
+		// ⭐ WHAT THE RUN LOCKED IS HELD UNTIL THE REPORT IS BUILT — read, folded and laid out by every output — and
+		// let go here, returned or refused (Max, 2026-11-26: a report locks first and is built on the rows it holds;
+		// others wait while it builds). docs/private/record-locks.md, stage 10.
+		struct ibRunLocks {
+			const ibDataComposer& m_composer;
+			~ibRunLocks() { m_composer.ForgetLocks(); }
+		} const runLocks{ *this };
 
 		bool read = false;
 		for (Output& output : m_outputs) {
@@ -1520,6 +1532,9 @@ public:
 	// The full cycle into the given driver.
 	bool Run(ibCompositionDriver& driver) override;
 
+	// The prepared store's locks (EnsureTempTables) — its tables stay for the run's key.
+	void ForgetLocks() const override { m_prepared.m_store.ForgetLocks(); }
+
 	// ⚠ AND THE NO-ARGUMENT Run COMES WITH IT. Declaring an override of one overload HIDES the whole
 	// name, so a caller holding this concrete type — rather than an ibDataComposer& — could not call
 	// the outputs-and-their-drivers Run at all, and got "does not take 0 arguments" for a member that
@@ -1655,7 +1670,7 @@ private:
 	struct PreparedTables
 	{
 		bool                  m_ready = false;
-		ibQueryTempTableStore m_store;
+		ibQueryTempDataStore  m_store;
 		std::map<ibString, std::shared_ptr<const ibBackendQueryable>> m_sources;
 
 		// ⭐ ONE ACT, ONE NAME. "Let go of what was prepared" was written out as three lines in four

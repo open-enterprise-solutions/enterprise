@@ -1954,12 +1954,13 @@ void ibDataDBComposer::EnsureTempTables() const
 
 	bool prepares = false;
 	for (const ibQueryAstStatement& statement : m_resolved.m_package.m_statements)
-		if (statement.m_select != nullptr && !statement.m_select->m_intoTemp.IsEmpty()) {
+		if (statement.IsLock() || statement.IsUnlock()
+			|| (statement.m_select != nullptr && !statement.m_select->m_intoTemp.IsEmpty())) {
 			prepares = true;
 			break;
 		}
 	if (!prepares)
-		return;   // nothing to make — which is every composition that does not write INTO
+		return;   // nothing to make or hold — which is every composition that writes no INTO and no LOCK
 
 	// The scope is opened HERE and holds a POINTER to the map, so each table is visible to the
 	// statement after it — that is the batch contract, and PreparePackage fills the map as it goes.

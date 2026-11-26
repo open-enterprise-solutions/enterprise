@@ -220,6 +220,7 @@ public:
 	//   * a select INTO temp  -> m_rowCount (there is no table to hand back — it went into the
 	//                            temp, and the following statements select FROM that name)
 	//   * a DROP              -> nothing but the fact that it ran
+	//   * a LINK / a LOCK     -> m_result: one row, `Count` — the rows it removed / the keys it holds
 	//
 	// The temp tables live for the WHOLE package (not one execution, as a single query's scope
 	// does): that is what lets statement 3 read what statement 2 left, and it is why DROP exists
@@ -255,21 +256,23 @@ public:
 		// The fix is the one this engine already settled on for the query skeleton: OWNERSHIP, not
 		// tracking — everyone who reads it holds a share, and the last one out takes it with them
 		// (docs, and the note beside ibDataQueryResult's own source share). Null when a caller's
-		// TempTablesManager owns the store instead; then IT is the keeper and nothing here need be.
-		std::shared_ptr<class ibQueryTempTableStore> m_temps;
+		// TempDataManager owns the store instead; then IT is the keeper and nothing here need be.
+		std::shared_ptr<class ibQueryTempDataStore> m_temps;
 	};
 
 	// Run every statement of `package` in order and return the results by position. Throws
 	// exactly as Execute does — a package fails at the statement that failed, with that
 	// statement's own message.
 	//
-	// `store` — WHO KEEPS THE TEMP TABLES ALIVE. Null: this package owns them for its own run and
-	// they die with the call. Non-null (a script's `TempTablesManager`): they outlive it, so a
-	// LATER query attached to the same store reads what this one left. Same mechanism, different
-	// holder — which is the whole difference between "a batch" and "a set of tables I am keeping".
+	// `store` — WHO KEEPS THE TEMP TABLES AND THE LOCKS ALIVE. Null: this package owns the tables for
+	// its own run and they die with the call; its locks are the transaction's, to its end. Non-null (a
+	// script's `TempDataManager`): both outlive it, so a LATER query attached to the same store reads
+	// what this one left and is read under what it locked — the manager alone holds a lock, past the
+	// transaction, until it is closed or gone. Same mechanism, different holder — which is the whole
+	// difference between "a batch" and "a set of tables and locks I am keeping".
 	static std::vector<ibQueryPackageResult> ExecutePackage(const ibQueryPackage& package,
 	                                                 const std::map<ibString, ibValue>& params,
-	                                                 class ibQueryTempTableStore* store = nullptr);
+	                                                 class ibQueryTempDataStore* store = nullptr);
 
 	// ⭐⭐ WHERE EACH LINKED SELECTION STANDS IN THE FINAL QUERY — the placement, and the ONE answer
 	// to it. `LINK` declares relations as a SET, in whatever order they were written; what a query
@@ -311,7 +314,7 @@ public:
 	// the batch contract. The caller opens the scope; this fills it.
 	static void PreparePackage(const ibQueryPackage& package,
 	                           const std::map<ibString, ibValue>& params,
-	                           class ibQueryTempTableStore& store,
+	                           class ibQueryTempDataStore& store,
 	                           std::map<ibString, std::shared_ptr<const ibBackendQueryable>>& sources);
 
 	// The PAGED read — the same lowering with an external page ENVELOPE (anchor /

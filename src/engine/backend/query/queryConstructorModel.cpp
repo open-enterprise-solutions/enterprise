@@ -10,6 +10,7 @@
 #include "queryableFactory.h"            // GetSourceFactory — the application the query runs on behalf of
 
 #include <algorithm>
+#include <map>
 
 // ⭐ ONE FIELD OF A SOURCE, AS THE CONSTRUCTOR OFFERS IT — written once for the three lists that offer
 // fields (a source's own, one hop down a reference, a virtual table's condition), which each spelled it
@@ -97,6 +98,21 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 	// THE WALK. Whatever registered is what the constructor offers — a metatype added tomorrow
 	// appears here the day it vends a descriptor, with nothing edited in this file. In the factory's order: the
 	// application's as its application is read (ibMetaQueryableFactory::GetDescriptors), then the platform's.
+	// ⭐ WHETHER A LOCK OF IT HOLDS — asked of the table it stands for, `<Kind>.<Object>` (a virtual table's and a
+	// tabular section's are their owner's), as the LOCK asks it (queryLock.cpp, HeldTable): its provider's CanLock.
+	// Once a table: a register's virtual tables share it.
+	std::map<ibString, bool> lockable;
+	const auto isLockable = [factory, &lockable](const std::vector<ibString>& path) {
+		if (path.size() < 2)
+			return false;
+		const auto [known, fresh] = lockable.emplace(path[0] + ibT(".") + path[1], false);
+		if (fresh) {
+			ibQueryableSourceDescriptor* const table = factory->FindDescriptor(path[0], path[1]);
+			const std::shared_ptr<const ibBackendQueryable> queryable = table != nullptr ? table->CreateQueryable(nullptr, 0) : nullptr;
+			known->second = queryable != nullptr && queryable->GetProvider().CanLock(queryable);
+		}
+		return known->second;
+	};
 	for (const ibQueryableSourceKind kind : { ibQueryableSourceKind::Application, ibQueryableSourceKind::Platform }) {
 		for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors(kind)) {
 			if (descriptor == nullptr)
@@ -119,6 +135,7 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 			source.m_presentation = source.Text();
 			source.m_picture = descriptor->GetPicture();
 			source.m_platform = kind == ibQueryableSourceKind::Platform;
+			source.m_lockable = isLockable(source.m_path);
 			out.push_back(std::move(source));
 		}
 	}

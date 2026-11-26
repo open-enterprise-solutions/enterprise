@@ -3850,15 +3850,17 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 	// ibValueTabularSectionDataObjectBase).
 	Storage().SetColumns(m_recordColumnCollection);
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
+	m_members.Bind(this, &ibValueRecordSetObject::FillRecordSetProperties);
 }
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModuleDataObject(source.GetMetaForCompile()),
-m_objModified(true), m_selected(ibSelection::NotSelected),
+m_objModified(true), m_selected(ibSelection::NotSelected), m_lockForUpdate(source.m_lockForUpdate),
 m_keyValues(source.m_keyValues), m_metaObject(source.m_metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
 	Storage().SetColumns(m_recordColumnCollection);   // as above
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
+	m_members.Bind(this, &ibValueRecordSetObject::FillRecordSetProperties);
 	for (long row = 0; row < source.GetRowCount(); row++) {
 		ibComposerNode* node = source.GetViewData<ibComposerNode>(source.GetItem(row));
 		ibASSERT(node);
@@ -3868,6 +3870,36 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 
 ibValueRecordSetObject::~ibValueRecordSetObject()
 {
+}
+
+// A property's data is what it is appended with: given none, it gets no place on its binder's level, as a method does,
+// and answers ibNOT_FOUND.
+enum prop
+{
+	ePropLockForUpdate = 0,
+};
+
+void ibValueRecordSetObject::FillRecordSetProperties(ibMemberTable& helper) const
+{
+	helper.AppendProp(ibT("LockForUpdate"), ePropLockForUpdate);
+}
+
+bool ibValueRecordSetObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+{
+	if (m_members.GetPropData(lPropNum, this, &ibValueRecordSetObject::FillRecordSetProperties) == ePropLockForUpdate) {
+		m_lockForUpdate = varPropVal.GetBoolean();
+		return true;
+	}
+	return ibValueModuleDataObject::SetPropVal(lPropNum, varPropVal);
+}
+
+bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	if (m_members.GetPropData(lPropNum, this, &ibValueRecordSetObject::FillRecordSetProperties) == ePropLockForUpdate) {
+		pvarPropVal = m_lockForUpdate;
+		return true;
+	}
+	return ibValueModuleDataObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
 

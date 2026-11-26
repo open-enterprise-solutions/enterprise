@@ -4788,6 +4788,12 @@ long ibDataQueryBuilder::ExecuteWrite(WriteKind kind) const
 	return ibQueryComposer::ExecuteWrite(m_spec, kind);
 }
 
+// A lock targets one table, as a write does: its provider holds the keys.
+std::shared_ptr<void> ibDataQueryBuilder::Lock(const std::vector<ibLockItem>& keys) const
+{
+	return m_spec.m_queryable->GetProvider().ExecuteLock(m_spec, keys);
+}
+
 // The inner's own conditions and folds are already in its rows, so the semi-join over the temp carries none. CAN is
 // asked BEFORE the rows are computed: without temp tables the caller's join in memory computes the inner again, and
 // rows taken first would be read twice (ibTempTableManager::CanMaterialise).

@@ -27,7 +27,7 @@
 #include "backend/compiler/enumUnit.h"          // ibValueEnumeration — runtime enum reflecting ibSelectKind
 #include "core/query/queryAST.h"
 #include "backend/query/queryLowering.h"
-#include "backend/query/queryTempStore.h"        // ibQueryTempTableStore — what TempTablesManager holds
+#include "backend/query/queryTempStore.h"        // ibQueryTempDataStore — what TempDataManager holds
 #include "backend/query/dataQueryBuilder.h"     // ibDataQueryResult / ibSelectKind
 #include "backend/query/queryReadState.h"    // ibQueryReadState — the state a live answer is read in
 #include "backend/query/querySelector.h"        // ibSelector — the grouped / hierarchical traversal
@@ -55,43 +55,48 @@ public:
 };
 
 // Type-invariant method surface (Close) — bound through the static base.
-void ibValueTempTablesManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+void ibValueTempDataManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
 // ---------------------------------------------------------------------------
-// script "TempTablesManager" — the thing that keeps temp tables alive between queries.
+// script "TempDataManager" — the thing that keeps temp tables and locks alive between queries.
 // ---------------------------------------------------------------------------
 //
 // A temp table is made by one query (`SELECT … INTO Sales`) and read by another. What decides
 // whether the second query can see it is not the query language — it is WHO IS HOLDING the table,
 // and this value is that holder made visible:
 //
-//     manager = New TempTablesManager();
+//     manager = New TempDataManager();
 //     first  = New Query("SELECT Ref INTO Sales FROM Document.Orders");
-//     first.TempTablesManager = manager;
+//     first.TempDataManager = manager;
 //     first.Execute();                        // yields the ROW COUNT; the table stays in `manager`
 //
 //     second = New Query("SELECT Ref FROM Sales");
-//     second.TempTablesManager = manager;     // the SAME tables, a different query
+//     second.TempDataManager = manager;       // the SAME tables, a different query
 //     second.Execute();
 //
 //     manager.Close();                        // and they are gone
 //
+// ⭐⭐ AND A MANAGED LOCK IS THE SAME HOLDER. A query's LOCK holds to the end of the transaction; attached
+// to a manager it is held by the manager instead — through every query it is reused for, past a commit,
+// with no transaction at all — until `Close()`, a later package's `DROP` of its name, or the manager is
+// gone. That is the whole of what a lock object would be, said by the query and its keeper.
+//
 // It is a variable with an owner's job, which is why it is wrapped rather than left implicit: the
-// tables die when the manager says so (or when it does), never at some scope boundary the author
-// cannot see. One verb — `Close()` — because there is only one decision to make about them.
-class BACKEND_API ibValueTempTablesManager : public ibValueStaticMembers<&ibValueTempTablesManager_BindNames>
+// tables and locks go when the manager says so (or when it does), never at some scope boundary the
+// author cannot see. One verb — `Close()` — because there is only one decision to make about them.
+class BACKEND_API ibValueTempDataManager : public ibValueStaticMembers<&ibValueTempDataManager_BindNames>
 {
 	enum { enClose = 0 };
 
 	// Non-copyable ownership behind a shared handle: the value may be assigned to several queries
-	// (that IS the point of it), and every one of them must see the SAME tables.
-	std::shared_ptr<ibQueryTempTableStore> m_store = std::make_shared<ibQueryTempTableStore>();
+	// (that IS the point of it), and every one of them must see the SAME tables and locks.
+	std::shared_ptr<ibQueryTempDataStore> m_store = std::make_shared<ibQueryTempDataStore>();
 
 public:
-	ibValueTempTablesManager() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
+	ibValueTempDataManager() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
 
 	// The store the queries attached to this manager read and write. Never null.
-	ibQueryTempTableStore* GetStore() const { return m_store.get(); }
+	ibQueryTempDataStore* GetStore() const { return m_store.get(); }
 
 	bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;   // Close
 };
@@ -107,7 +112,7 @@ public:
 	// PUBLIC because the bind function that names the property is a free one (the static member
 	// table is shared, so it cannot be a member) — and naming the index in both places beats
 	// writing a bare 0 in one of them.
-	enum { enPropTempTablesManager = 0, enPropText = 1 };
+	enum { enPropTempDataManager = 0, enPropText = 1 };
 
 private:
 
@@ -117,14 +122,14 @@ private:
 	ibQueryPackage              m_package;
 	std::map<ibString, ibValue> m_params;
 
-	// The manager this query's temp tables belong to, or an empty value.
+	// The manager this query's temp tables and locks belong to, or an empty value.
 	//
 	// EMPTY IS A MEANING, not a missing setting: without a manager the tables this query makes die
-	// WITH IT — they exist for the length of one execution and nothing outside can name them. With
-	// one, they are kept by the manager until it is closed (or dies), and any other query attached
-	// to the same manager reads them. The query never owns them in that case; it only writes into
-	// something that outlives it.
-	ibValue                     m_tempTables;
+	// WITH IT — they exist for the length of one execution and nothing outside can name them — and its
+	// locks are the transaction's. With one, both are kept by the manager until it is closed (or dies),
+	// and any other query attached to the same manager reads them. The query never owns them in that
+	// case; it only writes into something that outlives it.
+	ibValue                     m_tempData;
 
 	// Run the whole package and convert its results to script values, by position:
 	//   a plain select      -> a QueryResult
@@ -143,8 +148,8 @@ public:
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	                ibValue** paParams, const long lSizeArray) override;                              // Execute -> QueryResult
 
-	// TempTablesManager — read and written like any property, because that is what it is: the
-	// query is TOLD where its temp tables live, it does not go looking for them.
+	// TempDataManager — read and written like any property, because that is what it is: the
+	// query is TOLD where its temp tables and locks live, it does not go looking for them.
 	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 	bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
 };
@@ -170,11 +175,11 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 	// ⭐⭐ …AND THE TEMP TABLES THESE ROWS LIVE IN, for exactly the same reason and by the same means.
 	// A package's own store dies when its last reader lets go — and a script's `Execute()` hands the
 	// result out and reads it later, so the reader IS this object. Held, never touched: the share is
-	// the whole of its job. (Null when a TempTablesManager owns the store instead.)
+	// the whole of its job. (Null when a TempDataManager owns the store instead.)
 	//
 	// 🛑 Without it, `SELECT … INTO T …; SELECT … FROM T` read a column at 0xdddddddd and took the
 	// process down on the first field (dump 2026-09-04) — see ibQueryLowering::ibQueryPackageResult::m_temps.
-	std::shared_ptr<ibQueryTempTableStore>  m_temps;
+	std::shared_ptr<ibQueryTempDataStore>  m_temps;
 
 	void FillMembers(ibMemberTable& helper) const;
 
@@ -186,7 +191,7 @@ public:
 	ibValueQueryResult();                                                                            // empty
 	ibValueQueryResult(ibDataQueryResult&& result, std::vector<ibQueryLowering::ibQueryOutputColumn> schema, bool hasTotals,
 	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
-	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);
+	                   std::shared_ptr<ibQueryTempDataStore> temps = nullptr);
 	~ibValueQueryResult() override;
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
@@ -212,7 +217,7 @@ class BACKEND_API ibValueQuerySelect : public ibValueDynamicMembers
 	// …and the temp tables its rows live in, inherited the same way and for the same reason: a
 	// selection outlives the result it came from (`s = q.ExecuteBatch().Get(1).Select()` keeps only
 	// this object alive), so the share has to reach the LAST reader, not the first.
-	std::shared_ptr<ibQueryTempTableStore>  m_temps;
+	std::shared_ptr<ibQueryTempDataStore>  m_temps;
 
 	void    FillMembers(ibMemberTable& helper) const;
 	ibValue ReadColumn(const ibQueryLowering::ibQueryOutputColumn& oc) const;   // current row / node cell
@@ -222,11 +227,11 @@ public:
 	ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
 	                   std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
 	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
-	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);                    // flat list
+	                   std::shared_ptr<ibQueryTempDataStore> temps = nullptr);                    // flat list
 	ibValueQuerySelect(ibSelector&& tree,
 	                   std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
 	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
-	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);                    // grouped / TOTALS
+	                   std::shared_ptr<ibQueryTempDataStore> temps = nullptr);                    // grouped / TOTALS
 	~ibValueQuerySelect() override;
 
 	bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,

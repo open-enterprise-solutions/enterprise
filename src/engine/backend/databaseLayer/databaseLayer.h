@@ -731,6 +731,7 @@ typedef std::unordered_set<ibPreparedStatement*> DatabaseStatementHashSet;
 
 class ibDatabaseConnectionHolder;
 class ibConnectionPool;
+class ibTransactionTicket;   // transactionTicket.h — what lives until a transaction ends
 
 // Transaction options — how a BeginTransaction should behave. Declared here at namespace
 // scope rather than nested in ibDatabaseLayer so its default member initializers are complete
@@ -871,6 +872,11 @@ public:
 	/// Is a transaction currently open on this layer? Derived from the
 	/// depth counter so nested levels report active correctly.
 	bool IsActiveTransaction() { return m_txDepth > 0; }
+
+	/// ⭐ A TICKET — what lives until this transaction ends, handed in by whoever took it inside the transaction (a
+	/// lock's handle), let go once the outermost Commit or RollBack has resolved, whichever it was. L2 knows nothing
+	/// of what a ticket holds (transactionTicket.h). With no transaction open it is refused: there is nothing to live until.
+	void AddTicket(std::shared_ptr<ibTransactionTicket> ticket);
 
 	/// Holder that currently has this layer reserved for an active TX,
 	/// or nullptr if the layer is not pinned. Set by the connection
@@ -1113,6 +1119,8 @@ protected:
 	/// had to be dug out of the trace (2026-11-19: a committing code_run, a register's Period). Empty when the
 	/// rollback was not taken in a catch. Serial per session, as m_txDepth.
 	ibString m_txAbortedBy;
+	/// What lives until the transaction ends (AddTicket) — let go after the outermost Commit / RollBack.
+	std::vector<std::shared_ptr<ibTransactionTicket>> m_txTickets;
 
 	/// Back-pointer to the holder that has this layer reserved for an
 	/// active TX. Maintained exclusively by ibConnectionPool — see

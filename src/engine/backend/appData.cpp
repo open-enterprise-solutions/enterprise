@@ -15,6 +15,7 @@
 #include <sstream>
 #include <utility>   // std::exchange — the active application handed over
 
+#include "core/diagnostics/crashGuard.h"   // CurrentPidPortable — a base with no folder keeps its locks by its process
 #include "core/fileConfig.h"              // infobase.conf — a base's own settings
 #include "core/fileSystem.h"
 #include "core/memory/memoryPool.h"   // Drain — the pool's free list handed back at teardown
@@ -87,6 +88,21 @@ static ibString UserLocalDataFolder()
 	return ibString::FromUTF8(home) + ibT("/.") + program;
 #	endif
 #endif
+}
+
+ibString ibApplicationInstance::ResolveLockFile() const
+{
+	const ibString sep(ibFILE_SEP_PATH);
+	if (m_strServer.IsEmpty() && !m_strFile.IsEmpty())
+		return m_strFile + sep + ibT("sys.locks");     // beside sys.fdb: every client of the folder opens the same
+	if (!m_strServer.IsEmpty() && !m_strDirLocal.IsEmpty())
+		return m_strDirLocal + sep + ibT("sys.locks");   // the cluster's folder of the base: every worker of it
+	// No folder: nobody else can open this base's locks, so a file of this process's own — one for the base, named by
+	// the process and the base's place in it.
+	std::error_code error;
+	const ibString name = ibString::Format(ibT("oes-%d-%llu.locks"), static_cast<int>(ibCrashGuard::CurrentPidPortable()),
+		static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(this)));
+	return ibTextOf(std::filesystem::temp_directory_path(error) / ibPathOf(name));
 }
 
 ibString ibApplicationInstance::ResolveLogDir() const
@@ -898,7 +914,6 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 			CreateTableSession();
 			CreateTableUser();
 			CreateTableEvent();
-			CreateTableLock();             // sys_lock — long-held pessimistic locks
 			CreateTableJob();              // sys_job — the shared last-run clock and the jobs' settings
 			CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
 			CreateTableFile();             // sys_file — the sessions' temporary files
@@ -1042,7 +1057,6 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 
 ///////////////////////////////////////////////////////////////////////////////
 #include "backend/debugger/debugClient.h"
-#include "core/diagnostics/crashGuard.h"   // CurrentPidPortable — whom a debug run goes with
 #include "core/startProcess.h"   // ibStartProcess — a launch is asked for from a fiber too (app_run on the server)
 
 #pragma region execute 

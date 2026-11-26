@@ -14,7 +14,9 @@
 //   link     := LINK name { [INNER|LEFT|RIGHT|FULL] JOIN name ON predicate }
 //                                                      (the names are ONTO names — see §24.3)
 //   statement:= DROP name
-//             | selectCore { UNION [ALL] selectCore } [ORDER BY orderList] [TOTALS …] [FOR UPDATE]
+//             | LOCK [SHARED] [name] FROM source { join } [WHERE predicate]
+//             | UNLOCK name
+//             | selectCore { UNION [ALL] selectCore } [ORDER BY orderList] [TOTALS …]
 //   selectCore := SELECT [ALLOWED] [TOP n] [DISTINCT] selList [INTO name] FROM source { join }
 //                 [WHERE predicate] [GROUP BY exprList [HAVING predicate]]
 //   totalDim := columnPath [HIERARCHY | ELEMENTS]
@@ -101,7 +103,8 @@ private:
 	void   ThrowQueryException(const ibQueryToken& at, const ibString& msg) const;
 
 	// --- productions -----------------------------------------------------
-	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP or a full SELECT
+	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP, a LOCK, an UNLOCK or a full SELECT
+	std::shared_ptr<ibQueryAstLock> ParseLock();            // LOCK [SHARED] [name] FROM source { join } [WHERE …]
 	// A package-level LINK SECTION — `LINK T1 LEFT JOIN T2 ON … JOIN T3 ON …`. One word, then the
 	// relation spelled as this language spells every relation; a chain yields one link per JOIN.
 	std::vector<ibQueryPackageLink> ParsePackageLinks();

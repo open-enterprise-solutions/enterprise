@@ -58,6 +58,19 @@ TEST(LinqBlock, AfterAClauseTheClausesFollow)
 	EXPECT_FALSE(Offers(KEY_INTO, KEY_JOIN));
 }
 
+// `Lock` stands after the source or a `Where`, and what follows it reads the same source.
+TEST(LinqBlock, LockFollowsTheSourceOrAWhere)
+{
+	EXPECT_TRUE(Offers(KEY_IN, KEY_LOCK));
+	EXPECT_TRUE(Offers(KEY_WHERE, KEY_LOCK));
+	EXPECT_FALSE(Offers(KEY_ORDERBY, KEY_LOCK));
+	EXPECT_FALSE(Offers(KEY_INTO, KEY_LOCK)) << "the rows after Into are groups, not the source's records";
+	for (const int key : { KEY_WHERE, KEY_SELECT, KEY_ORDERBY, KEY_GROUP, KEY_TAKE, KEY_SKIP })
+		EXPECT_TRUE(Offers(KEY_LOCK, key)) << key;
+	EXPECT_FALSE(Offers(KEY_LOCK, KEY_JOIN));
+	EXPECT_FALSE(Offers(KEY_LOCK, KEY_FROM));
+}
+
 // ------------------------------- the block ----------------------------------
 
 TEST(LinqBlock, ASourceAConditionAndColumns)
@@ -399,6 +412,67 @@ TEST(LinqBlock, AQueryWrittenByHandIsRead)
 
 	// …and written back bare, as it was.
 	EXPECT_NE(wxNOT_FOUND, block.Render(ibString(), refusal).Find(wxT("Select c.Description")));
+}
+
+// ⭐ THE LOCK READS BACK WITH ITS KEY AND ITS WAY: the `Where` right before it is the key, the ones after it
+// only filter (the compiler keys it so). Before `Lock` was a clause here, `Where k Lock Shared Where c` read
+// as ONE condition, `k Lock Shared` — and the module's editor found the query's end by the same reading.
+TEST(LinqBlock, ALockReadsBackWithItsKeyAndItsWay)
+{
+	ibLinqBlock block(CODE_CES);
+	block.m_sources.push_back(Source(ibT("s"), ibT("Data.AccumulationRegisters.Stock.Balance")));
+	block.m_lock = true;
+	block.m_lockShared = true;
+	block.m_lockKey = ibT("s.Product = product");
+	block.m_conditions.push_back(ibT("s.QuantityBalance > 0"));
+
+	ibString refusal;
+	const ibString written = block.Render(ibString(), refusal);
+	ASSERT_TRUE(refusal.IsEmpty()) << refusal.ToStdString();
+	EXPECT_EQ(written, RoundTrip(block));
+
+	ibLinqBlock read(CODE_CES);
+	ASSERT_TRUE(ibLinqBlock::Parse(written, read, refusal)) << refusal.ToStdString();
+	EXPECT_TRUE(read.m_lock);
+	EXPECT_TRUE(read.m_lockShared);
+	EXPECT_EQ(ibString(ibT("s.Product = product")), read.m_lockKey);
+	ASSERT_EQ(1u, read.m_conditions.size());
+	EXPECT_EQ(ibString(ibT("s.QuantityBalance > 0")), read.m_conditions[0]);
+}
+
+// …with no key it holds the whole source, and stands right after it; the conditions still only filter.
+TEST(LinqBlock, ALockWithoutAKeyStandsRightAfterTheSource)
+{
+	ibLinqBlock block(CODE_CES);
+	ibString refusal;
+	ASSERT_TRUE(ibLinqBlock::Parse(ibT("From g In Data.Catalogs.Goods Lock Where g.Price > 0 Select g"), block, refusal))
+		<< refusal.ToStdString();
+	EXPECT_TRUE(block.m_lock);
+	EXPECT_FALSE(block.m_lockShared);
+	EXPECT_TRUE(block.m_lockKey.IsEmpty());
+	ASSERT_EQ(1u, block.m_conditions.size());
+	EXPECT_EQ(block.Render(ibString(), refusal), RoundTrip(block));
+}
+
+// The compiler holds a lock to one source and one key; the block says so where it is built, not at OK.
+TEST(LinqBlock, ALockBesideASecondSourceOrAfterTwoConditionsIsRefused)
+{
+	ibLinqBlock block(CODE_CES);
+	block.m_sources.push_back(Source(ibT("g"), ibT("goods")));
+	ibLinqBlockSource prices = Source(ibT("p"), ibT("prices"));
+	prices.m_join = true;
+	prices.m_leftKey = ibT("g.Ref");
+	prices.m_rightKey = ibT("p.Item");
+	block.m_sources.push_back(prices);
+	block.m_lock = true;
+
+	ibString refusal;
+	EXPECT_TRUE(block.Render(ibString(), refusal).IsEmpty());
+	EXPECT_NE(wxNOT_FOUND, refusal.Find(ibT("one source"))) << refusal.ToStdString();
+
+	ibLinqBlock read(CODE_CES);
+	EXPECT_FALSE(ibLinqBlock::Parse(ibT("From g In goods Where g.A = a Where g.B = b Lock Select g"), read, refusal));
+	EXPECT_FALSE(refusal.IsEmpty());
 }
 
 TEST(LinqBlock, APartTheBlockDoesNotModelIsRefusedNotDropped)

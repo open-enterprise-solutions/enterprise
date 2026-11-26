@@ -13,6 +13,7 @@
 
 
 #include "core/core.h"   // CORE_API
+#include "core/hash.h"   // the mixer — GetHash
 
 class ibString;          // core/fstring.h - the flag's text; the family meets in backend_core.h
 
@@ -29,6 +30,9 @@ public:
 	constexpr ibBoolean(bool flag) noexcept : m_flag(flag) {}
 
 	constexpr operator bool() const noexcept { return m_flag; }
+
+	// THE FLAG'S HASH — what a value's hash and a lock key read (core/hash.h).
+	constexpr std::uint64_t GetHash() const noexcept { return ibHashStep(kIbHashBasis, m_flag ? 1u : 0u); }
 
 	// READ FROM A TEXT: `True` / `False` in any case, the spaces around it aside. False when the text is
 	// neither — and the flag is then false.

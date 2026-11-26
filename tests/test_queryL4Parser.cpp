@@ -785,7 +785,7 @@ TEST(QueryRender, ExpressionAloneRenders) {
 }
 
 // ===========================================================================
-//  The constructor's own surface — ALLOWED / FOR UPDATE / INTO / DROP, the
+//  The constructor's own surface — ALLOWED / INTO / DROP / LOCK / UNLOCK, the
 //  PACKAGE, and a lone expression parsed back.
 //
 //  Every one of these exists because a constructor tab edits it, and each is
@@ -838,20 +838,75 @@ TEST(QueryL4Parser, AllowedComposesWithTopAndDistinct)
 	EXPECT_TRUE(sel->m_distinct);
 }
 
-TEST(QueryL4Parser, ForUpdateIsParsedAndIsNotTheDefault)
+// ⭐⭐ LOCK IS A STATEMENT OF THE PACKAGE — it stands between selects, and holds the values its WHERE names.
+TEST(QueryL4Parser, LockIsAStatementOfThePackage)
 {
-	auto plain = Parse(wxT("SELECT Ref FROM Catalog.Products"));
-	ASSERT_NE(nullptr, plain);
-	EXPECT_FALSE(plain->m_forUpdate);
+	const ibQueryPackage package = ParsePkg(
+		ibT("SELECT Product INTO Goods FROM Document.SalesOrder.Goods WHERE Ref = &Order;")
+		ibT("LOCK FROM AccumulationRegister.Stock WHERE Product IN (SELECT Product FROM Goods) AND Warehouse = &Warehouse;")
+		ibT("SELECT Product, QuantityBalance FROM AccumulationRegister.Stock.Balance()"));
+	ASSERT_EQ(3u, package.m_statements.size());
 
-	auto locked = Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Code = \"1\" FOR UPDATE"));
-	ASSERT_NE(nullptr, locked);
-	EXPECT_TRUE(locked->m_forUpdate);
+	const ibQueryAstStatement& statement = package.m_statements[1];
+	ASSERT_TRUE(statement.IsLock());
+	EXPECT_EQ(nullptr, statement.m_select);
+	EXPECT_EQ(ibQueryLockModeAst::Exclusive, statement.m_lock->m_mode);
+	ASSERT_NE(nullptr, statement.m_lock->m_select);
+	ASSERT_EQ(2u, statement.m_lock->m_select->m_from.m_name.size());
+	EXPECT_EQ(ibString(ibT("Stock")), statement.m_lock->m_select->m_from.m_name[1]);
+	EXPECT_NE(nullptr, statement.m_lock->m_select->m_where);
+	EXPECT_TRUE(statement.m_lock->m_name.IsEmpty()) << "unnamed: held until the transaction ends";
+	EXPECT_FALSE(package.m_statements[0].IsLock());
 }
 
-TEST(QueryL4Parser, ForWithoutUpdateIsASyntaxError)
+// SHARED, a virtual table, a join and a name — and the UNLOCK that lets it go by that name.
+TEST(QueryL4Parser, LockSharedJoinedAndNamed)
 {
-	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products FOR")), ibQueryRefusal);
+	const ibQueryPackage package = ParsePkg(
+		ibT("LOCK SHARED PriceLock FROM InformationRegister.Prices.SliceLast(&Date) AS p ")
+		ibT("INNER JOIN Document.SalesOrder.Goods AS g ON p.Product = g.Product ")
+		ibT("WHERE g.Ref = &Order;")
+		ibT("SELECT 1;")
+		ibT("UNLOCK PriceLock"));
+	ASSERT_EQ(3u, package.m_statements.size());
+
+	const std::shared_ptr<ibQueryAstLock>& lock = package.m_statements[0].m_lock;
+	ASSERT_NE(nullptr, lock);
+	EXPECT_EQ(ibQueryLockModeAst::Shared, lock->m_mode);
+	ASSERT_NE(nullptr, lock->m_select);
+	const ibQuerySelect& held = *lock->m_select;
+	EXPECT_EQ(3u, held.m_from.m_name.size());
+	EXPECT_EQ(1u, held.m_from.m_args.size());
+	EXPECT_EQ(ibString(ibT("p")), held.m_from.m_alias);
+	ASSERT_EQ(1u, held.m_joins.size());
+	EXPECT_EQ(ibQueryJoinKindAst::Inner, held.m_joins[0].m_kind);
+	EXPECT_NE(nullptr, held.m_joins[0].m_on);
+	EXPECT_NE(nullptr, held.m_where);
+	EXPECT_TRUE(held.m_projections.empty()) << "a LOCK holds tables; it selects nothing";
+	EXPECT_EQ(ibString(ibT("PriceLock")), lock->m_name);
+	ASSERT_TRUE(package.m_statements[2].IsUnlock());
+	EXPECT_FALSE(package.m_statements[2].IsDrop()) << "DROP is a table's verb, UNLOCK the lock's";
+	EXPECT_EQ(ibString(ibT("PriceLock")), package.m_statements[2].m_unlock);
+	EXPECT_THROW(ParsePkg(ibT("UNLOCK")), ibQueryRefusal);
+	// ONTO names a select's result; a lock has none, and its name is not said that way.
+	EXPECT_THROW(ParsePkg(ibT("LOCK FROM Catalog.Products ONTO Held")), ibQueryRefusal);
+	// FROM stands before the tables, as a select's; ON is a join's (Max, 2026-11-26).
+	EXPECT_THROW(ParsePkg(ibT("LOCK Catalog.Products")), ibQueryRefusal);
+	EXPECT_THROW(ParsePkg(ibT("LOCK Held ON Catalog.Products")), ibQueryRefusal);
+}
+
+// A LOCK HOLDS TABLES OF THE BASE: rows a nested query makes or a table handed in are nobody's to keep out of.
+TEST(QueryL4Parser, LockOverRowsThatAreNotTheBasesIsRefused)
+{
+	EXPECT_THROW(ParsePkg(ibT("LOCK FROM (SELECT Ref FROM Catalog.Products) AS x")), ibQueryRefusal);
+	EXPECT_THROW(ParsePkg(ibT("LOCK FROM &Goods")), ibQueryRefusal);
+	EXPECT_THROW(ParsePkg(ibT("LOCK FROM Catalog.Products AS c INNER JOIN &Goods AS g ON c.Ref = g.Product")), ibQueryRefusal);
+}
+
+// FOR UPDATE LEFT THE LANGUAGE: the words are read as names now, and the text after the query is refused.
+TEST(QueryL4Parser, ForUpdateIsNotTheLanguage)
+{
+	EXPECT_THROW(Parse(ibT("SELECT Ref FROM Catalog.Products WHERE Code = \"1\" FOR UPDATE")), ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, IntoNamesTheTempTable)
@@ -957,11 +1012,29 @@ TEST(QueryL4Parser, ABrokenExpressionThrowsFromTheEngine)
 	EXPECT_THROW(parser.ParseExpression(wxT("Price 100")), ibQueryRefusal);
 }
 
-TEST(QueryRender, AllowedAndForUpdateRoundTrip) {
+TEST(QueryRender, AllowedRoundTrips) {
 	ExpectRoundTrip(wxT("SELECT ALLOWED Ref FROM Catalog.Products"));
 	ExpectRoundTrip(wxT("SELECT ALLOWED TOP 5 DISTINCT Ref FROM Catalog.Products"));
-	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Price > 10 FOR UPDATE"));
-	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products ORDER BY Ref ASC FOR UPDATE"));
+}
+
+TEST(QueryRender, LockRoundTrips) {
+	ExpectPackageRoundTrip(ibT("LOCK FROM AccumulationRegister.Stock WHERE Product = &Product AND Warehouse = &Warehouse"));
+	ExpectPackageRoundTrip(ibT("LOCK FROM Catalog.Products"));
+	ExpectPackageRoundTrip(
+		ibT("LOCK SHARED PriceLock FROM InformationRegister.Prices.SliceLast(&Date) AS p ")
+		ibT("INNER JOIN Document.SalesOrder.Goods AS g ON p.Product = g.Product ")
+		ibT("WHERE g.Ref = &Order;")
+		ibT("SELECT Product FROM InformationRegister.Prices.SliceLast(&Date);")
+		ibT("UNLOCK PriceLock"));
+
+	// …and what is written reads back as the same lock.
+	const ibQueryPackage reparsed = ParsePkg(ibRenderQueryPackage(ParsePkg(
+		ibT("LOCK SHARED Held FROM AccumulationRegister.Stock AS s, Catalog.Products AS c WHERE s.Product = c.Ref"))));
+	ASSERT_EQ(1u, reparsed.m_statements.size());
+	ASSERT_TRUE(reparsed.m_statements[0].IsLock());
+	EXPECT_EQ(ibQueryLockModeAst::Shared, reparsed.m_statements[0].m_lock->m_mode);
+	EXPECT_EQ(1u, reparsed.m_statements[0].m_lock->m_select->m_joins.size());
+	EXPECT_EQ(ibString(ibT("Held")), reparsed.m_statements[0].m_lock->m_name);
 }
 
 TEST(QueryRender, IntoRoundTrips) {
@@ -1033,15 +1106,9 @@ TEST(QueryL4Parser, IntoInsideANestedTableIsRefused)
 		ibQueryRefusal);
 }
 
-TEST(QueryL4Parser, ForUpdateInsideANestedTableIsRefused)
-{
-	EXPECT_THROW(Parse(wxT("SELECT Code FROM (SELECT Code FROM Catalog.Products FOR UPDATE) AS x")),
-		ibQueryRefusal);
-}
-
 TEST(QueryL4Parser, ANestedTableWithoutThoseWordsStillParses)
 {
-	// The refusal above must be about the two words, not about nested tables.
+	// The refusal above must be about the word, not about nested tables.
 	auto sel = Parse(wxT("SELECT Code FROM (SELECT Code FROM Catalog.Products) AS x"));
 	ASSERT_NE(nullptr, sel);
 	EXPECT_NE(nullptr, sel->m_from.m_subquery);

@@ -155,10 +155,10 @@ bool ibValueRecordDataObjectDocument::CallAsProc(const long lMethodNum, ibValue*
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectDocument::FillMethods))
 	{
 	case Func::eLock:
-		TryAcquireFormLock();
+		TryLock();
 		return true;
 	case Func::eUnlock:
-		ReleaseFormLock();
+		Unlock();
 		return true;
 	}
 

@@ -992,9 +992,19 @@ void ibQueryLowering::CheckNames(const ibQueryPackage& package, const std::map<i
 {
 	const ibCastLeafScope castLeaves;   // one query's narrowed fields (ibCastLeafScope) — at every door
 	const std::map<ibString, ibValue> params = WithEveryParameter(ibRenderQueryPackage(package), set);
-	for (const ibQueryAstStatement& statement : package.m_statements)
+	for (const ibQueryAstStatement& statement : package.m_statements) {
 		if (statement.m_select)
 			CheckSelectNames(*statement.m_select, params);
+		// A LOCK names its tables, their links and its key as a select's FROM and WHERE do — and is checked as one.
+		else if (statement.IsLock()) {
+			ibQuerySelect tables;
+			tables.m_from      = statement.m_lock->m_select->m_from;
+			tables.m_joins     = statement.m_lock->m_select->m_joins;
+			tables.m_where     = statement.m_lock->m_select->m_where;
+			tables.m_selectAll = true;
+			CheckSelectNames(tables, params);
+		}
+	}
 }
 
 std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(

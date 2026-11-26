@@ -368,6 +368,10 @@ public:
 	// file base or the name of a server one. Read by the journal.
 	const ibString& GetInstanceName() const { return m_strInstance; }
 	const ibString& GetFile() const { return m_strFile; } // a Firebird base's folder (VCS working copy root)
+	// The base's lock file, every process of the base holding it (ibLockFile): `sys.locks` in the file base's folder,
+	// else in the server base's own (m_strDirLocal), else — a base with no folder, a test's — a file of this process
+	// in the system's temporary folder.
+	ibString ResolveLockFile() const;
 
 	// The base's locale where it names one, else the PROCESS's (ibApplicationHost).
 	ibString GetLocale() const;
@@ -442,9 +446,7 @@ private:
 	static void CreateTableUser();
 	static void CreateTableSession();
 	static void CreateTableEvent();
-	static void CreateTableLock();
 #ifdef OES_TESTING
-	friend struct LockSchemaAccess;   // the race test opens a base that already has sys_lock
 	friend struct JobSchemaAccess;    // the job runtime test writes job settings into a base it made
 #endif
 	// sys_job — the shared last-run clock for scheduled jobs and their settings (active / schedule).
@@ -509,7 +511,7 @@ private:
 	// pool; ibApplicationInstance keeps no direct DB handle of its own.
 	std::unique_ptr<class ibConnectionPool> m_connectionPool;
 
-	// Long-held pessimistic lock coordinator (sys_lock table). No
+	// Long-held pessimistic lock coordinator (the base's lock file, ResolveLockFile). No
 	// external dependencies on teardown.
 	std::unique_ptr<class ibLockManager> m_lockManager;
 
@@ -704,12 +706,6 @@ private:
 #define sequence_table			ibT("sys_sequence")
 #define event_table				ibT("sys_event")
 #define bytecode_cache_table	ibT("sys_bytecode_cache")
-#define lock_table				ibT("sys_lock")
-// One row per key, primary key (namespace, keyHash). Acquire locks this row for the
-// transaction, then reads and writes sys_lock. Release does not delete it. The
-// sweep does, once nobody holds the key. An old binary on the same base still
-// acquires without this row, so the race stays open until every process is upgraded.
-#define lock_key_table			ibT("sys_lock_key")
 // sys_job — one row per scheduled job, holding the LAST RUN as every process on
 // this base sees it. Without it each process keeps its own clock and a job runs
 // once per process per interval instead of once per interval.

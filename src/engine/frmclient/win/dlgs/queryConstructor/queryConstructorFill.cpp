@@ -16,13 +16,17 @@ using namespace queryctor;
 //  The AST being edited
 // ===========================================================================
 
-// THE STATEMENT'S OWN SELECT — the one that owns the union branches, the INTO, the FOR UPDATE.
+// THE STATEMENT'S OWN SELECT — the one that owns the union branches and the INTO.
 ibQuerySelectPtr ibDialogQueryConstructor::StatementSelect() const
 {
 	if (m_statement >= m_package.m_statements.size())
 		return nullptr;
+	// A LOCK's is the one it holds by — its tables, links and conditions are edited on the same tabs a query's are.
+	const ibQueryAstStatement& statement = m_package.m_statements[m_statement];
+	if (statement.IsLock())
+		return statement.m_lock->m_select;
 	// A DROP statement has no select — the tabs show nothing, correctly.
-	return m_package.m_statements[m_statement].m_select;
+	return statement.m_select;
 }
 
 // WHAT THE TABS EDIT. Normally the statement itself; when a union BRANCH is selected on the strip
@@ -299,6 +303,8 @@ void ibDialogQueryConstructor::FillPackage()
 	// The KIND, read back off the statement — which is where it lives; the control is a view of it.
 	const int kind = statement == nullptr ? 0
 		: statement->IsDrop() ? 2
+		: statement->IsLock() ? 4
+		: statement->IsUnlock() ? 5
 		: (statement->m_select && !statement->m_select->m_intoTemp.IsEmpty()) ? 1
 		: (statement->m_select && !statement->m_select->m_ontoName.IsEmpty()) ? 3 : 0;
 
@@ -307,6 +313,8 @@ void ibDialogQueryConstructor::FillPackage()
 	if (m_tempName != nullptr) {
 		m_tempName->ChangeValue(statement == nullptr ? ibString()
 			: statement->IsDrop() ? statement->m_dropTemp
+			: statement->IsLock() ? statement->m_lock->m_name
+			: statement->IsUnlock() ? statement->m_unlock
 			: statement->m_select == nullptr ? ibString()
 			: (kind == 3 ? statement->m_select->m_ontoName : statement->m_select->m_intoTemp));
 		m_tempName->Enable(kind != 0);   // the name is asked only by the kinds that need one
@@ -337,7 +345,9 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 
 	const ibQueryAstStatement* statement = m_statement < m_package.m_statements.size()
 		? &m_package.m_statements[m_statement] : nullptr;
-	const bool isDrop = statement != nullptr && statement->IsDrop();
+	// An UNLOCK is a DROP of a lock: Advanced and nothing of a query (Max, 2026-11-26).
+	const bool isDrop = statement != nullptr && (statement->IsDrop() || statement->IsUnlock());
+	const bool isLock = statement != nullptr && statement->IsLock();
 
 	// How many tables the query actually reads — the Links tab exists only from the second one.
 	// Only a statement that MATERIALISES its result has a table to index.
@@ -354,6 +364,8 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 	for (const Page& page : m_pages) {
 		if (page.m_queryPage && isDrop)
 			continue;
+		if (page.m_refusedByLock && isLock)
+			continue;   // a lock selects no fields — nothing to group, order, total or unite
 		if (page.m_needsTwoTables && tableCount < 2)
 			continue;   // a join is a relation BETWEEN two sources
 		if (page.m_needsTempTable && !makesTempTable)
@@ -395,6 +407,16 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 		if (!keep && page.m_window != nullptr)
 			page.m_window->Hide();
 	}
+
+	// ⭐ A LOCK'S FIRST TAB SAYS WHAT IT IS — the tables it holds (Max, 2026-11-26: "Locked tables"). A tab already in
+	// place is captioned again here, before the early-out: the set may stay the same for it.
+	const auto captionOf = [isLock](const Page& page) {
+		return isLock && !page.m_lockTitle.IsEmpty() ? page.m_lockTitle : page.m_title;
+	};
+	for (size_t i = 0; i < m_notebook->GetPageCount(); ++i)
+		for (const Page* page : wanted)
+			if (m_notebook->GetPage(i) == page->m_window && m_notebook->GetPageText(i) != captionOf(*page))
+				m_notebook->SetPageText(i, captionOf(*page));
 
 	// REBUILD ONLY WHEN THE SET ACTUALLY CHANGED. This runs on every refill — that is, on every
 	// edit — and tearing the notebook down each time cost two visible bugs: the selected tab jumped
@@ -447,18 +469,23 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 				continue;   // already in place
 			}
 			page->m_window->Show();
-			m_notebook->InsertPage(at, page->m_window, page->m_title, false, static_cast<int>(page - m_pages.data()));
+			m_notebook->InsertPage(at, page->m_window, captionOf(*page), false, static_cast<int>(page - m_pages.data()));
 			++at;
 		}
 	}
 
 	// The tab that was showing, if it is still one of them — by TITLE, because the page window a
-	// title belongs to is the same object either way.
-	for (size_t i = 0; i < m_notebook->GetPageCount(); ++i)
-		if (m_notebook->GetPageText(i) == selected) {
+	// title belongs to is the same object either way. Either of its titles: a lock's first tab is the
+	// query's first tab under another caption.
+	for (size_t i = 0; i < m_notebook->GetPageCount(); ++i) {
+		const auto page = std::find_if(m_pages.begin(), m_pages.end(),
+			[this, i](const Page& p) { return p.m_window == m_notebook->GetPage(i); });
+		if (page != m_pages.end()
+			&& (page->m_title == selected || (!page->m_lockTitle.IsEmpty() && page->m_lockTitle == selected))) {
 			m_notebook->SetSelection(i);
 			break;
 		}
+	}
 }
 
 // EVERY TREE IN THIS WINDOW IS DRESSED THE SAME WAY. Written once because "the catalogue has
@@ -1064,6 +1091,11 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 	// `Journal.Events`. Created on demand, as the temporary tables' below.
 	wxTreeItemId platform;
 	std::map<wxString, wxTreeItemId> groups;
+	// ⭐ A LOCK GREYS WHAT IT WOULD BE REFUSED ON — a table whose provider holds no lock of it (the server's answer,
+	// ibQueryConstructorSource::m_lockable), and the package's temporary tables, which no other session reads. Greyed,
+	// not hidden: the tree stays the one a person knows.
+	const bool lock = m_statement < m_package.m_statements.size() && m_package.m_statements[m_statement].IsLock();
+	const wxColour refused = wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
 	for (const ibQueryConstructorSource& source : m_model.GetSources()) {
 		if (source.m_path.empty())
 			continue;
@@ -1086,6 +1118,8 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 		const int icon = KindIcon(icons, kind);
 		const wxTreeItemId table = tree->AppendItem(root == it->second ? root : it->second,
 			leaf, icon, icon, new ibQueryTreeNode(source.m_path, false));
+		if (lock && !source.m_lockable)
+			tree->SetItemTextColour(table, refused);
 		if (!withFields)
 			continue;
 
@@ -1134,6 +1168,8 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 				continue;   // a selection, not a table — see above
 			const wxTreeItemId table = tree->AppendItem(groupFor(), temp.m_presentation,
 				tempIcon, tempIcon, new ibQueryTreeNode(temp.m_path, true));
+			if (lock)
+				tree->SetItemTextColour(table, refused);
 			if (!withFields)
 				continue;
 
@@ -1153,6 +1189,19 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 
 void ibDialogQueryConstructor::FillTables()
 {
+	// ⭐ A LOCK SELECTS NOTHING — it holds what it reads (Max, 2026-11-26), so beside its tables there is no fields
+	// pane: the splitter keeps the tables alone, and gives the fields back to any other kind.
+	if (wxWindow* const fieldsPane = m_fields != nullptr ? m_fields->GetParent() : nullptr) {
+		ibSplitterWindow* const split = dynamic_cast<ibSplitterWindow*>(fieldsPane->GetParent());
+		const bool lock = m_statement < m_package.m_statements.size() && m_package.m_statements[m_statement].IsLock();
+		if (split != nullptr && lock && split->IsSplit())
+			split->Unsplit(fieldsPane);
+		else if (split != nullptr && !lock && !split->IsSplit()) {
+			fieldsPane->Show();
+			split->SplitVertically(split->GetWindow1(), fieldsPane, FromDIP(300));
+		}
+	}
+
 	m_tables->DeleteAllItems();
 	TreeIcons icons = PrepareIcons(m_tables);
 	const wxTreeItemId root = m_tables->AddRoot(wxEmptyString);
@@ -1713,12 +1762,26 @@ void ibDialogQueryConstructor::FillAdvanced()
 	const ibQuerySelectPtr select = Current();
 	const bool has = select != nullptr;
 
+	// A SELECT PICKS ITS RECORDS by the three words; a LOCK picks none and holds them, SHARED or not; a DROP and an
+	// UNLOCK do neither. Each word is live for the kind it belongs to and greyed for the others.
+	const ibQueryAstStatement* statement = m_statement < m_package.m_statements.size()
+		? &m_package.m_statements[m_statement] : nullptr;
+	const bool selects = statement == nullptr
+		|| !(statement->IsDrop() || statement->IsLock() || statement->IsUnlock());
+	const bool locks = statement != nullptr && statement->IsLock();
+
 	m_distinct ->SetValue(has && select->m_distinct);
 	m_allowed  ->SetValue(has && select->m_allowed);
-	m_forUpdate->SetValue(has && select->m_forUpdate);
 	m_useTop   ->SetValue(has && select->m_top > 0);
 	m_topCount ->SetValue(has && select->m_top > 0 ? static_cast<int>(select->m_top) : 10);
-	m_topCount ->Enable(has && select->m_top > 0);
+	m_useTop   ->Enable(selects);
+	m_topCount ->Enable(selects && has && select->m_top > 0);
+	m_distinct ->Enable(selects);
+	m_allowed  ->Enable(selects);
+	if (m_lockShared != nullptr) {
+		m_lockShared->SetValue(locks && statement->m_lock->m_mode == ibQueryLockModeAst::Shared);
+		m_lockShared->Enable(locks);
+	}
 }
 
 void ibDialogQueryConstructor::FillPreview()

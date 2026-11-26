@@ -31,9 +31,9 @@ namespace {
 // The opcode list as it was when kAOTFormatVersion was last set. Computed
 // by OpcodeFingerprint(), which reads codeDef.h: every OPER_ enumerator and
 // the TYPE_DELTA macros, comments stripped. 37: OPER_CALL_CLOSURE is gone. 38: the operands and the sources moved,
-// the opcode list did not. 39: OPER_LINQ_WINDOW.
-constexpr std::uint16_t kVersionOfThisFingerprint = 39;
-constexpr std::uint64_t kOpcodeFingerprintAtThatVersion = 11570421614657598604ULL;
+// the opcode list did not. 39: OPER_LINQ_WINDOW. 40: OPER_LINQ_LOCK.
+constexpr std::uint16_t kVersionOfThisFingerprint = 40;
+constexpr std::uint64_t kOpcodeFingerprintAtThatVersion = 429292683041193099ULL;
 
 ibString CodeDefPath()
 {

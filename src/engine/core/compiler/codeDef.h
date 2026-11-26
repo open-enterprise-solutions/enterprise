@@ -174,6 +174,24 @@ enum { //instruction types
 	// compiler had nothing to say) — the handler does nothing at all.
 	OPER_LINQ_NARROW,
 
+	// ⭐⭐ THE BLOCK'S `lock` — the source's records held before the loop reads one, keyed by the `where`
+	// written right before the clause (docs/private/record-locks.md). It stands before the outermost
+	// loop of every block and does nothing until a `lock` fills it in, because the clause is met only
+	// after the loop has opened and a lock taken on the first row would come after the first read.
+	//
+	// The tree is READ off the `where`'s instructions, as OPER_LINQ_NARROW reads it — but here a where
+	// that does not read as a query's condition is a refusal, not a quiet way round: a lock never
+	// covers less than the author asked.
+	//
+	// Operands:
+	//   m_param1                            — the source slot
+	//   m_param2 (m_numIndex .. m_numArray) — the `where`'s instructions; equal — no `where`, the table
+	//                                         locked whole. The OPER_IF at m_numArray asks the where's
+	//                                         answer (its m_param1).
+	//   m_param3.m_numIndex                 — 0: no `lock` written · 1: `lock` · 2: `lock shared`
+	//   m_param4                            — the cell the row arrives in
+	OPER_LINQ_LOCK,
+
 	// ⭐⭐ HAVE I SEEN THIS ROW BEFORE — the whole of `Distinct`, in one instruction.
 	//
 	// The obvious emission is a script Array and `Contains` per row, which is what BOTH roads used to
@@ -377,6 +395,8 @@ enum { // numbers of keywords (in strict sequence as the values ​​themselves
 	KEY_BY,             // group-by / orderby key separator
 	KEY_INTO,           // `group ... into <id>`             — group binding
 	KEY_RESTRICT,       // `restrict <id> in <src> join ... where ...` — access-policy filter
+	KEY_LOCK,           // `lock [shared]`                   — the source's records held, keyed by the where before it
+	KEY_SHARED,         // lock modifier                     — others may hold them too, none may change them
 	LastKeyWord
 };
 
@@ -480,6 +500,8 @@ enum ibScriptError { //Error message numbers
 	// --- compiler, appended ------
 	ibScriptError_KeywordAsName,
 	ibScriptError_ForCountsWithTo,
+	ibScriptError_LinqLockSource,
+	ibScriptError_LinqLockWhere,
 
 	ibScriptError_Count
 };

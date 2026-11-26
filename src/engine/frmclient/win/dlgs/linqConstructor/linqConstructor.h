@@ -193,6 +193,11 @@ private:
 	ibCheckBox*               m_distinct = nullptr;
 	ibStaticText*             m_fieldsNote = nullptr;   // on the fields tab: what the columns are when grouped
 
+	// The Data lock tab — the block's `Lock [Shared]` and its key, the `Where` written right before it.
+	ibCheckBox*               m_lock = nullptr;
+	ibCheckBox*               m_lockShared = nullptr;
+	ibTextCtrl*               m_lockKey = nullptr;
+
 	// The block, shown by the code editor itself — the same colouring the module has.
 	class ibCodeEditor*       m_block = nullptr;
 	ibStaticText*             m_verdict = nullptr;

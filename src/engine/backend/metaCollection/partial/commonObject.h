@@ -2589,12 +2589,12 @@ protected:
 	ibString m_loadedDataVersion;
 
 public:
-	// Override ibSourceDataObject::TryAcquireFormLock — keys the lock
+	// Override ibSourceDataObject::TryLock — keys the lock
 	// by this object's ref guid in the "<Kind>.<Name>" namespace.
 	// No-op for new (unsaved) objects — nothing to identify yet.
-	// Throws ibBackendLockException::LockConflict on conflict; caller
-	// (form-open path) decides whether to propagate or degrade.
-	bool TryAcquireFormLock(ibLockMode mode = ibLockMode::Exclusive) override;
+	// Throws ibBackendLockException::LockConflict on conflict; the
+	// caller decides whether to propagate or degrade.
+	bool TryLock(ibLockMode mode = ibLockMode::Exclusive) override;
 };
 
 //Object with reference type and group/object type
@@ -2903,6 +2903,10 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModuleDataObject<ibValu
 	// values — and reads the set on its own side.
 	virtual bool IsTransferable() const override { return false; }
 
+	// The set's own properties (FillRecordSetProperties) — every other name is the module's.
+	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_recordColumnCollection; }
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
 		if (!line.IsOk())
@@ -3074,6 +3078,9 @@ public:
 
 	void CreateEmptyKey();
 	bool InitializeObject(const ibValueRecordSetObject* source = nullptr, bool newRecord = false);
+	// The set's own properties, a level of their own under the module's names and above a register's verbs:
+	// LockForUpdate. (Filter is the module's — an export variable, InitializeObject.)
+	void FillRecordSetProperties(ibMemberTable& helper) const;
 
 	bool FindKeyValue(const ibMetaID& id) const { return m_keyValues.find(id) != m_keyValues.end(); }
 	template <typename value>
@@ -3092,7 +3099,9 @@ public:
 	virtual ibValuePtr<ibValueRecordSetObject> CopyRegisterValue();
 
 	bool Selected() const { return m_selected == ibSelection::Selected; }
-	void Read() { ReadData(); }
+	// The script's Read: in a transaction it holds the set's key first — shared, exclusive with LockForUpdate — and
+	// reads under it (docs/private/record-locks.md, stage 12).
+	void Read();
 
 	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers (via the table
 	// chain root). The module-export surface autobinds in the descriptor ctor.
@@ -3271,6 +3280,7 @@ protected:
 
 	bool m_objModified;
 	ibSelection m_selected;
+	bool m_lockForUpdate = false;   // LockForUpdate: Read holds the key exclusive
 
 	ibRowMetaValues m_keyValues;
 

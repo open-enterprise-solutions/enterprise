@@ -61,8 +61,12 @@ enum class ibQueryKeyword
 	Link,
 	// INDEX BY … — the columns a materialised temp table is indexed by
 	Index,
-	// FOR UPDATE — the select HOLDS the rows it returned until the transaction ends
-	For, Update,
+	// LOCK [SHARED] <table> … — THE FIFTH OPERATOR OF THE PACKAGE (Max, 2026-11-26): it HOLDS values of the tables it
+	// names until the transaction ends (ibQueryAstLock). It replaced FOR UPDATE. UNLOCK <name> lets go of one it named
+	// (ONTO) — its own word, the pair of LOCK, because DROP reads as a table's (Max). None of the three takes a name
+	// away: LOCK and UNLOCK stand where a statement begins and SHARED right after LOCK, where no name can stand — and a
+	// keyword met where a field may stand is read back as a name (ParsePrimary).
+	Lock, Shared, Unlock,
 
 	// hierarchical TOTALS (subtotal rows per level + grand total — door SelectTotals)
 	// the dimension VID: Hierarchy (folders + items) / HierarchyOnly (folders only) / Elements (flat, default)

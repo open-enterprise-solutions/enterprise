@@ -12,7 +12,7 @@
 #include "core/query/queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
 #include "core/query/queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
 #include "backend/query/queryRamTable.h"                          // ibQueryRamTable — a package's temp table IS a snapshot
-#include "backend/query/queryTempStore.h"                         // ibQueryTempTableStore — WHO keeps the temp tables alive
+#include "backend/query/queryTempStore.h"                         // ibQueryTempDataStore — WHO keeps the temp tables alive
 #include "backend/query/tempTableQueryable.h"                     // ibTempTableQueryable — a table handed in as a PARAMETER is a source
 #include "backend/query/queryable.h"                              // ibBackendQueryColumn / ibQueryFilterOp
 #include "backend/query/columnLayout.h"                           // ColumnFieldNames — a declared query publishes only what it can write
@@ -1648,13 +1648,12 @@ bool IsComputedExprAst(const ibQueryAstExpr& e)
 // base's, or that of a base in memory a COMPUTED source (register slice / subquery) is copied into (SELECT / WHERE /
 // SUM alike). Over a JOIN it is not computed here at all: the statement reads its rows one level
 // down and computes it over them, one source (queryRewrite.cpp, rule 3). What still arrives is a statement that
-// rule leaves as written — `SELECT *`, `FOR UPDATE`.
+// rule leaves as written — `SELECT *`.
 void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
 {
 	if (sources.size() > 1)
 		ThrowQueryException(e.m_line, e.m_col, _("an arithmetic / CASE expression over a JOIN is computed over the rows "
-		                                         "the join makes, and SELECT * or FOR UPDATE keeps them where they are: "
-		                                         "name the fields, or lock the rows in a query of their own"));
+		                                         "the join makes, and SELECT * keeps them where they are: name the fields"));
 }
 
 // Does this side of a comparison read a field of the row — anywhere inside it, not only as itself?
@@ -1846,7 +1845,7 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 			return nullptr;
 	if (sel.m_selectAll || sel.m_projections.size() != cols.size() || !sel.m_joins.empty() || !sel.m_groupBy.empty()
 	    || sel.m_having || sel.m_top > 0 || sel.m_hasTotals || !sel.m_unions.empty() || !sel.m_intoTemp.IsEmpty()
-	    || sel.m_forUpdate || sel.m_from.m_subquery || !sel.m_from.m_args.empty()
+	    || sel.m_from.m_subquery || !sel.m_from.m_args.empty()
 	    || std::any_of(sel.m_projections.begin(), sel.m_projections.end(),
 	           [](const auto& projection) { return ibQueryMentionsAggregate(projection.m_expr); }))
 		return nullptr;
@@ -2296,8 +2295,7 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ResolveFieldOperand(con
 	if (e.m_kind != ibQueryAstExprKind::Column)
 		ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 			_("'%s' is not a field, and this condition reads one. In a WHERE the engine reads such a value one level "
-			  "down itself when the query names its fields (not SELECT *, not FOR UPDATE, not inside a table's own "
-			  "parameters)"),
+			  "down itself when the query names its fields (not SELECT *, not inside a table's own parameters)"),
 			ibRenderQueryExpr(e)));
 	return ResolveWhereTarget(sources, e, allowDotWalk);
 }
@@ -3221,7 +3219,7 @@ static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
 
 // ⭐⭐ THE ROWS AS THE AUTHOR SEES THEM, STANDING AS A SOURCE. Every output is taken the way its reader takes it, into a
 // table keyed by the output's column — so a reader holding that column finds its cell there, as it did in the rows the
-// engine sent — and the table stands as a temp table we filled (ibQueryTempTableStore), read by the provider of tables
+// engine sent — and the table stands as a temp table we filled (ibQueryTempDataStore), read by the provider of tables
 // in memory. The steps no engine could take over these rows (DISTINCT, a grouping, an order by such an output) are
 // asked of a DOOR over that source: the lowering links the door, and folds, dedupes and sorts nothing itself.
 // `cols` — that source's column for each output, in the schema's order; the schema is told each output is now a plain
@@ -3247,7 +3245,7 @@ std::shared_ptr<const ibBackendQueryable> ReadVisibleRows(ibDataQueryResult& row
 		}
 	}
 
-	ibQueryTempTableStore store;   // one table — held by its source once the store is gone
+	ibQueryTempDataStore store;   // one table — held by its source once the store is gone
 	store.Put(ibT("the finished rows"), std::move(read), {}, ibSourceMetaDataScope::Get());
 	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().begin()->second;
 	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> published = source->GetQueryColumns();
@@ -4863,14 +4861,8 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 // composition's own query has always taken — and the totals fold its rows under the names the SELECT gave them.
 // What the totals and the order name travels with them: an output's name as it is, a source path the SELECT chose
 // onto that output, anything else carried down as an output of its own that the reader never sees.
-//
-// FOR UPDATE is refused beside TOTALS: the lock is the table's own rows, which a declared query does not hold and a
-// nested read does not take — carried down, it would be lost without a word.
 ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::map<ibString, ibValue>& params)
 {
-	if (ast->m_forUpdate)
-		ThrowQueryException(0, 0, _("FOR UPDATE cannot stand beside TOTALS: lock the rows with a plain query first, "
-		                            "then total them"));
 	if (ast->m_from.m_name.empty() && !ast->m_from.m_subquery && ast->m_joins.empty() && ast->m_unions.empty())
 		return ast;
 
@@ -5170,19 +5162,16 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// uses), and whether that tree renders is a question for the tier that writes the SQL — asked
 	// below, once the door exists, by CanDeclareAsNamedQuery.
 
-	// …AND THE WORDS A DECLARATION WOULD DROP ON THE FLOOR. Each of these is carried by the rows road
-	// and by nothing here, so taking this road with one of them written is the SILENT kind of wrong —
-	// the query still runs and answers differently:
-	//   FOR UPDATE — a declaration holds nothing, so the rows an author believes locked are not;
-	//   INTO       — it materialises a temp table, which is the opposite of declaring a query.
-	// (The same ones the FROM-flattening rule refuses, for the same reason — queryRewrite.cpp.)
+	// …AND THE WORD A DECLARATION WOULD DROP ON THE FLOOR. It is carried by the rows road and by nothing
+	// here, so taking this road with it written is the SILENT kind of wrong — the query still runs and
+	// answers differently: INTO materialises a temp table, which is the opposite of declaring a query.
+	// (The FROM-flattening rule refuses it for the same reason — queryRewrite.cpp.)
 	//
 	// ⭐ TOP USED TO STAND HERE and no longer does. The reasoning was sound and the premise was not:
 	// "a CTE built without the limit publishes EVERY row" was true of the BUILDER, which rendered the
 	// body from an empty page request and dropped `m_topCount` on the floor — not of `WITH`, which
 	// takes a limited body in every engine that has it. The body now carries its own limit
 	// (AttachNamedQueries, both roads), so the declaration says what the author wrote.
-	if (sel.m_forUpdate)          CteDecline(ibT("it has FOR UPDATE, and a declaration holds nothing"));
 	if (!sel.m_intoTemp.IsEmpty()) CteDecline(ibT("it has INTO, which materialises rather than declares"));
 
 	ibDataQueryBuilder inner;
@@ -5490,13 +5479,6 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<ibString, 
 	// First branch = ast's CORE (strip the whole-union ORDER / TOTALS / the union list itself).
 	// Its TOP is stripped too: on the first core it means the WHOLE-union limit (like the trailing
 	// ORDER BY) and applies at the final Execute; a later branch's TOP limits that branch only.
-	// FOR UPDATE cannot mean anything here and must not pretend to. A union is composed — its rows
-	// are stacked out of branch results, so there is nothing left for the driver to hold. Saying so
-	// is the honest answer; carrying the flag into a read that cannot honour it would leave an
-	// author believing the rows were locked when they were not.
-	if (ast.m_forUpdate)
-		ThrowQueryException(0, 0, _("FOR UPDATE cannot be used with UNION: a composed result holds no rows to lock"));
-
 	ibDataQueryBuilder b;
 	const std::shared_ptr<ibSubqueryQueryable> b0 = BuildUnionStack(ast, params, b, outSchema, owner);
 
@@ -6200,10 +6182,6 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 	ibReadPageRequest page = pageIn;
 	if (ast.m_top > 0 && !dedupeOverRow && !sortOverRow && (page.m_count <= 0 || ast.m_top < page.m_count))
 		page.m_count = ast.m_top;
-	// FOR UPDATE rides the page request — the dialect appends its own row-lock clause
-	// (FOR UPDATE / WITH LOCK) from there. Nothing new below L2: the driver half was built.
-	if (ast.m_forUpdate)
-		page.m_lockForUpdate = true;
 	ibDataQueryResult rows = cache != nullptr && !dedupeOverRow && !sortOverRow ? b.Execute(page, *cache, *signature) : b.Execute(page);
 	if (!computedOverRow.empty())
 		rows.SetComputedOverRow(std::move(computedOverRow));
@@ -7458,9 +7436,6 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 	ibReadPageRequest topPage;
 	if (ast.m_top > 0) topPage.m_count = ast.m_top;
-	// FOR UPDATE reaches the DETAIL read — the one that actually touches rows. A subtotal holds
-	// nothing of its own, so locking the detail is what the word can honestly mean here.
-	if (ast.m_forUpdate) topPage.m_lockForUpdate = true;
 
 	// ⭐⭐ LET THE DBMS FOLD IT. Until now every TOTALS came back as DETAIL ROWS that were folded
 	// here, in memory — the composition's whole point (report over many rows) paying for exactly
@@ -7468,17 +7443,17 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// and returns only the aggregated rows; the tree arrives built, and the walk reads it.
 	//
 	// Refused where it would change the answer rather than the cost: TOP limits the DETAIL rows the
-	// fold runs over, and FOR UPDATE has to touch the rows it locks — neither survives being folded
-	// away, so both keep the detail read. Everything else asks the shape and the driver.
+	// fold runs over, which does not survive being folded away, so it keeps the detail read.
+	// Everything else asks the shape and the driver.
 	// …and refused when the reader asked for the DETAIL ROWS: ROLLUP folds them away server-side, so
 	// there would be nothing left to hang under the last heading. Details cost the rows by
 	// definition — the choice is the reader's, and this is where it is paid.
 	// ⭐⭐ WHICH ROAD, AND WHY — the one decision in this function nobody can see from outside, and the
-	// one that decides whether a report answers in a second or in a minute. Four separate things can
-	// send a fold into memory (rows were asked for, TOP, FOR UPDATE, or the shape the DBMS refused),
+	// one that decides whether a report answers in a second or in a minute. Three separate things can
+	// send a fold into memory (rows were asked for, TOP, or the shape the DBMS refused),
 	// and every one of them is silent by construction: the answer is identical either way, only the
 	// cost differs. So the journal says which road was taken and what stood in the way of the other.
-	const bool eligible = (ast.m_top == 0 && !ast.m_forUpdate && !withDetails);
+	const bool eligible = (ast.m_top == 0 && !withDetails);
 	if (eligible) {
 		// The result has no default state — an empty one is made the way every empty result is.
 		ibDataQueryResult folded = ibMakeEmptyQueryResult(nullptr);
@@ -7497,9 +7472,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		ibJournalInfo(ibT("query.totals"), ibT("%u level(s), %u resource(s): folded in memory - %s"),
 			static_cast<unsigned>(ast.m_totalsBy.size()),
 			static_cast<unsigned>(ast.m_totalsAggregates.size()),
-			withDetails      ? ibT("the rows were asked for")
-			: ast.m_forUpdate ? ibT("FOR UPDATE must touch the rows it locks")
-			                  : ibT("TOP caps the detail rows the fold runs over"));
+			withDetails ? ibT("the rows were asked for")
+			            : ibT("TOP caps the detail rows the fold runs over"));
 	}
 
 	return b.Execute(topPage);

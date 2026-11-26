@@ -929,6 +929,12 @@ TEST(ValueHashContract, TrailingZeroHashesWithTheInteger) {
     EXPECT_EQ(ibValue(1).GetValueHash(), ibValue(ibNumber(1.0)).GetValueHash());
 }
 
+// …and the fraction is the value's too: 1.5 and 1.7 part, as the order parts them.
+TEST(ValueHashContract, AFractionHashesApart) {
+    EXPECT_NE(ibValue(ibNumber(ibString(ibT("1.5")))).GetValueHash(),
+              ibValue(ibNumber(ibString(ibT("1.7")))).GetValueHash());
+}
+
 TEST(ValueHashContract, ReferenceHashesAsItsTarget) {
     EXPECT_EQ(ibValue(7).GetValueHash(), ibValue(new ibValue(7)).GetValueHash());
     EXPECT_EQ(ibValue(ibString(wxT("k"))).GetValueHash(),

@@ -5,6 +5,7 @@
 #include "connectionPool.h"
 
 #include "databaseProfiler.h"   // the doors below tell a database measurement
+#include "transactionTicket.h"  // ibTransactionTicket — what lives until a transaction ends (AddTicket)
 
 // ctor()
 ibDatabaseLayer::ibDatabaseLayer()
@@ -134,9 +135,22 @@ void ibDatabaseLayer::Commit()
 	m_txDepth = 0;
 	m_txAborted = false;
 	m_txAbortedBy.Clear();
+	// The tickets go now the transaction has ended — after the commit, so whoever waited for one reads what was
+	// kept. Taken out first: below the pin's release nothing touches `this`.
+	std::vector<std::shared_ptr<ibTransactionTicket>> tickets;
+	tickets.swap(m_txTickets);
 	// Release the holder's TX pin LAST: the layer stays alive through whatever other shared_ptr the
 	// caller holds (scope, pool entry after drop, etc.), and nothing below this line touches `this`.
 	ibConnectionPool::ClearActiveTxConnection(shared_from_this());
+	tickets.clear();
+}
+
+void ibDatabaseLayer::AddTicket(std::shared_ptr<ibTransactionTicket> ticket)
+{
+	if (m_txDepth == 0)
+		ibBackendDatabaseException::Throw(ibBackendDatabaseException::Kind::NoTransaction,
+			_("Nothing can be held until the transaction ends: no transaction is open"));
+	m_txTickets.push_back(std::move(ticket));
 }
 
 void ibDatabaseLayer::RollBack()
@@ -168,6 +182,9 @@ void ibDatabaseLayer::RollBack()
 	m_txDepth = 0;
 	m_txAborted = false;
 	m_txAbortedBy.Clear();
+	// The tickets go after the rollback — or with it, if the driver refuses.
+	std::vector<std::shared_ptr<ibTransactionTicket>> tickets;
+	tickets.swap(m_txTickets);
 	ibConnectionPool::ClearActiveTxConnection(shared_from_this());
 	MeasuredStep(this, ibT("ROLLBACK"), [this] { DoRollBack(); });
 }

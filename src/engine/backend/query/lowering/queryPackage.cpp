@@ -6,7 +6,7 @@
 
 #include "queryLoweringInternal.h"
 
-#include "backend/query/queryTempStore.h"           // ibQueryTempTableStore — WHO keeps the temp tables alive
+#include "backend/query/queryTempStore.h"           // ibQueryTempDataStore — WHO keeps the temp tables and the locks alive
 #include "core/query/queryRender.h"                 // ibRenderQueryPackage — the package as the journal says it; ibQueryColumnFromPath
 #include "core/query/queryRewrite.h"                // ibQueryFlattenAnd — a link's condition, one conjunct at a time
 
@@ -55,6 +55,20 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 
 } // namespace ibLowering
 
+namespace {
+
+// A store that is NO MANAGER lends a LOCK its name for one run only (ExecuteLock): from the run's end — returned or refused —
+// the transaction alone holds it. The store outlives the run (a package's own, with its results), and a share left in
+// it would outlive the transaction; Close would take it from the transaction. (A composer's store is the holder itself,
+// as a manager is, until its run ends — PreparePackage.)
+struct ibRunLocks
+{
+	ibQueryTempDataStore* m_store;   // null: a manager's store — its locks are its own
+	~ibRunLocks() { if (m_store != nullptr) m_store->ForgetLocks(); }
+};
+
+} // namespace
+
 // ⭐⭐ WHAT PREPARES, RUN — see the header. The COMPOSER's road: it lowers ONE statement of its own
 // and needs the tables the statements before it MAKE to be standing when it does.
 //
@@ -65,7 +79,7 @@ ibQueryRamTable DrainIntoSnapshot(ibDataQueryResult& result,
 // and passes the other by.
 void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 	const std::map<ibString, ibValue>& params,
-	ibQueryTempTableStore& store,
+	ibQueryTempDataStore& store,
 	std::map<ibString, std::shared_ptr<const ibBackendQueryable>>& sources)
 {
 	const ibCastLeafScope castLeaves;   // one query's narrowed fields (ibCastLeafScope) — at every door
@@ -82,6 +96,20 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 				ThrowQueryException(0, 0, ibString::Format(
 					_("temporary table '%s' does not exist"), statement.m_dropTemp));
 			sources.erase(statement.m_dropTemp);   // …and out of the registry with it, not left dangling
+			continue;
+		}
+
+		// A LOCK PREPARES TOO — what the composer's own statement reads after it is read under it. The
+		// composer's store holds it ALONE, as a manager would: a report is read outside a transaction, and its
+		// locks last until the report is built — the composer lets go when its run ends (ibDataComposer::Run,
+		// ForgetLocks; docs/private/record-locks.md, stage 10).
+		if (statement.IsLock()) {
+			ExecuteLock(*statement.m_lock, params, store, &store);
+			continue;
+		}
+		if (statement.IsUnlock()) {
+			if (!store.Unlock(statement.m_unlock))
+				ThrowQueryException(0, 0, _("UNLOCK %s: no lock has that name"), statement.m_unlock);
 			continue;
 		}
 
@@ -102,8 +130,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 		}
 
 		if (store.Has(ast.m_intoTemp))
-			ThrowQueryException(0, 0, ibString::Format(
-				_("temporary table '%s' already exists"), ast.m_intoTemp));
+			ThrowQueryException(0, 0, _("'%s' already names a temporary table or a lock"), ast.m_intoTemp);
 		CheckIndexNamesOutputs(ast);   // before a row is read
 
 		std::vector<ibQueryOutputColumn> schema;
@@ -355,11 +382,25 @@ long KeepMatched(ibQueryLowering::ibQueryPackageResult& side, const ibQueryRamTa
 	return dropped;
 }
 
+// ⭐ A STATEMENT THAT ANSWERS WITH A NUMBER — a link with the rows it removed, a lock with the keys it holds: a result
+// of one row and one column, `Count`, so the array of results stays one kind of thing.
+void AnswerCount(ibQueryLowering::ibQueryPackageResult& r, long count)
+{
+	ibQueryRamTable counted;
+	counted.AddColumn(1, ibT("Count"), ibTypeDescription());
+	counted.SetCell(counted.AppendRow(), 1, ibValue(static_cast<int>(count)));
+	r.m_result = std::make_unique<ibDataQueryResult>(std::move(counted), nullptr);
+
+	ibQueryOutputColumn oc;
+	oc.m_name = ibT("Count"); oc.m_alias = ibT("Count"); oc.m_byAlias = true;
+	r.m_schema.push_back(oc);
+}
+
 } // namespace
 
 std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePackage(
 	const ibQueryPackage& package, const std::map<ibString, ibValue>& params,
-	ibQueryTempTableStore* store)
+	ibQueryTempDataStore* store)
 {
 	const ibCastLeafScope castLeaves;   // one query's narrowed fields (ibCastLeafScope) — at every door
 	std::vector<ibQueryPackageResult> results;
@@ -377,18 +418,20 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 
 	// WHO KEEPS THE TABLES ALIVE. Without a store the package owns one for its own run: a single
 	// query's temp scope is RAII-bound to ONE execution, so statement 3 would never see what
-	// statement 2 left. With a store handed in (a script's TempTablesManager), the tables outlive
+	// statement 2 left. With a store handed in (a script's TempDataManager), the tables outlive
 	// this call and several separate queries share them — the same mechanism, a different holder.
+	// So do the locks: a manager holds them, and alone (ExecuteLock).
 	//
 	// The scope holds a POINTER to the map either way, so entries added mid-package are visible to
 	// every statement after them, which IS the batch contract.
 	// ⚠ SHARED, NOT A LOCAL. The tables die when the last READER lets go, not when this function
 	// returns — the results handed back point at this store's columns and are read afterwards. See
 	// ibQueryPackageResult::m_temps for what a stack local cost here.
-	const std::shared_ptr<ibQueryTempTableStore> ownStore =
-		store != nullptr ? nullptr : std::make_shared<ibQueryTempTableStore>();
-	ibQueryTempTableStore& temps = store != nullptr ? *store : *ownStore;
+	const std::shared_ptr<ibQueryTempDataStore> ownStore =
+		store != nullptr ? nullptr : std::make_shared<ibQueryTempDataStore>();
+	ibQueryTempDataStore& temps = store != nullptr ? *store : *ownStore;
 	ibTempSourceScope packageScope(temps.Sources());
+	const ibRunLocks runLocks{ ownStore.get() };   // …but not its locks: the results share the tables only
 
 	// THE RESULTS THIS PACKAGE HAS NAMED so far, by their ONTO name (lower-cased: names in this
 	// language are matched without regard to case). A later statement may read one of them, and
@@ -405,6 +448,25 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 				ThrowQueryException(0, 0, ibString::Format(_("temporary table '%s' does not exist"), statement.m_dropTemp));
 			ibQueryPackageResult r;
 			r.m_dropTemp = statement.m_dropTemp;
+			results.push_back(std::move(r));
+			continue;
+		}
+
+		// …AND UNLOCK, THE LOCK'S OWN: let go now rather than at the holder's end. The name may be one an EARLIER
+		// query gave, when both were handed the same TempDataManager. Like a drop it answers nothing.
+		if (statement.IsUnlock()) {
+			if (!temps.Unlock(statement.m_unlock))
+				ThrowQueryException(0, 0, _("UNLOCK %s: no lock has that name"), statement.m_unlock);
+			results.emplace_back();
+			continue;
+		}
+
+		// ⭐⭐ A LOCK HOLDS WHERE IT STANDS: what is read after it is read under it. It answers with the number of
+		// keys it holds, as a link answers with the rows it removed. Its name is the lock's, not a result's: a LINK
+		// does not read it.
+		if (statement.IsLock()) {
+			ibQueryPackageResult r;
+			AnswerCount(r, ExecuteLock(*statement.m_lock, params, temps, store));
 			results.push_back(std::move(r));
 			continue;
 		}
@@ -484,15 +546,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 			// ⭐ THE SECTION'S OWN ANSWER: how many rows this link removed, in total, from the
 			// selections it reconciled (Max, 2026-09-04: *"a link returns either Undefined, or how
 			// many rows it filtered out"*).
-			ibQueryRamTable counted;
-			counted.AddColumn(1, ibT("Count"), ibTypeDescription());
-			counted.SetCell(counted.AppendRow(), 1, ibValue(static_cast<int>(removedInSection)));
-			r.m_result = std::make_unique<ibDataQueryResult>(std::move(counted), nullptr);
-
-			ibQueryOutputColumn oc;
-			oc.m_name = ibT("Count"); oc.m_alias = ibT("Count"); oc.m_byAlias = true;
-			r.m_schema.push_back(oc);
-
+			AnswerCount(r, removedInSection);
 			results.push_back(std::move(r));
 			continue;
 		}
@@ -584,9 +638,9 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 		// A name declared twice is a mistake worth naming: the second statement would otherwise
 		// silently shadow the first and the reader could not tell which one was read afterwards.
 		// (With a shared store the clash can also be against a table an EARLIER query left, which
-		// is the same mistake seen from further away.)
+		// is the same mistake seen from further away — or a lock: one name space, see queryTempStore.h.)
 		if (temps.Has(ast.m_intoTemp))
-			ThrowQueryException(0, 0, ibString::Format(_("temporary table '%s' already exists"), ast.m_intoTemp));
+			ThrowQueryException(0, 0, _("'%s' already names a temporary table or a lock"), ast.m_intoTemp);
 
 		ibQueryRamTable snapshot = DrainIntoSnapshot(read, schema);
 		r.m_rowCount = snapshot.RowCount();
@@ -734,7 +788,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 
 	// ⭐ AND EVERY RESULT TAKES A SHARE OF THE TABLES IT READS FROM — stated ONCE, here, rather than
 	// at each of the four places a result is built: a share that has to be remembered per branch is
-	// a share the next branch forgets. Null store = a caller's TempTablesManager owns them already.
+	// a share the next branch forgets. Null store = a caller's TempDataManager owns them already.
 	if (ownStore)
 		for (ibQueryPackageResult& r : results)
 			r.m_temps = ownStore;

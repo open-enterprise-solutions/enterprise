@@ -37,11 +37,13 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
   by several fields, a level that fills its calendar, and `SPLIT` to fold the same rows several ways
   beside the main tree.
 - **A package.** Statements separated by `;`. `INTO` makes a temporary table (`INDEX BY` its columns),
-  `DROP` releases it, `ONTO` names a result, `LINK` relates named results by joins.
-- **`FOR UPDATE`** holds the rows a select returned until the transaction ends
-  ([record-locks.md](record-locks.md)). **`SELECT ALLOWED`** reads rows the user may not see as none,
-  instead of a refusal ([access-rights.md](access-rights.md)). It is said once, for the whole query: every
-  query nested in it - `FROM (SELECT …)`, a `UNION` branch, `IN (SELECT …)` - reads under it.
+  `DROP` releases it, `ONTO` names a result, `LINK` relates named results by joins, `LOCK` holds values of
+  tables - a step: what is read after it is read under it; its `WHERE` is any condition, its equalities the
+  keys - until the transaction ends. A `TempDataManager` keeps both temporary tables and locks past one
+  query, and `UNLOCK` lets its named lock go at once ([record-locks.md](record-locks.md)).
+- **`SELECT ALLOWED`** reads rows the user may not see as none, instead of a refusal
+  ([access-rights.md](access-rights.md)). It is said once, for the whole query: every query nested in it -
+  `FROM (SELECT …)`, a `UNION` branch, `IN (SELECT …)` - reads under it.
 
 ## What it guarantees
 

@@ -274,10 +274,10 @@ bool ibValueRecordDataObjectParameterizedJob::CallAsProc(const long lMethodNum, 
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectParameterizedJob::FillMethods))
 	{
 	case Func::enLock:
-		TryAcquireFormLock();
+		TryLock();
 		return true;
 	case Func::enUnlock:
-		ReleaseFormLock();
+		Unlock();
 		return true;
 	}
 

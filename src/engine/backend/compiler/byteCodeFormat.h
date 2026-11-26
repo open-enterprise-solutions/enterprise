@@ -19,6 +19,7 @@
 // 37: OPER_CALL_CLOSURE left the opcode list (a lambda takes cells, not frames).
 // 38: an operand is two int32, a class id a constant, an instruction's source a number in the blob's table of them.
 // 39: OPER_LINQ_WINDOW joined the opcode list (an ordered query's skip / take cut after the order).
-constexpr std::uint16_t kAOTFormatVersion = 39;
+// 40: OPER_LINQ_LOCK joined the opcode list (a block's `lock`, before its outermost loop).
+constexpr std::uint16_t kAOTFormatVersion = 40;
 
 #endif // __BYTE_CODE_FORMAT_H__

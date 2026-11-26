@@ -1,23 +1,20 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibLockManager implementation — sys_lock app-table coordination.
+// ibLockManager implementation — the base's lock file (ibLockFile).
 //
-// Acquire algorithm (one transaction on the lock holder, so the commit
-// does not ride on the caller's business transaction):
+// Acquire algorithm:
 //
-//   1. For each key, in (namespace, keyHash) order: lock sys_lock_key
-//      until this transaction ends. UPDATE the header row; when it is
-//      missing, INSERT it. Two inserts of the same key meet the primary
-//      key — the loser rolls back and retries, then updates the row the
-//      winner left. The wait is the transaction's lock_timeout, so a
-//      noWait acquire refuses immediately.
-//   2. Read sys_lock for that key.
-//        - same owner → re-entrant (upgrade or no-op)
-//        - other owner and either side Exclusive → LockConflict
-//   3. INSERT the caller's sys_lock row.
-//   4. COMMIT. The header row stays. Release does not delete it.
+//   1. The owner's slot — its own already, or one taken for its first row.
+//   2. The regions of the batch's tables, held exclusive in the order of
+//      their numbers (ibLockFile::Change), their rows read once:
+//        - same owner, same key → re-entrant (upgrade or no-op)
+//        - other owner, either side Exclusive, and the keys meet
+//          (ibLockKey::Overlap) → a conflict
+//   3. The caller's rows written, the regions let go.
 //
-// On any conflict / driver error mid-batch we rollback the whole TX,
-// so partial acquires never persist (atomic batch semantics).
+// A conflict writes nothing (atomic batch semantics), and is refused at
+// once, or — when the caller gave a timeout — asked again until it frees
+// or the time is up, outside m_mtx: woken by a release in this process,
+// or by the holder's slot byte when the holder is another process's.
 //
 // See docs/private/record-locks.md for the full design.
 /////////////////////////////////////////////////////////////////////////////
@@ -26,88 +23,35 @@
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
-#include "backend/databaseLayer/connectionPool.h"
-#include "backend/databaseLayer/connectionScope.h"
-#include "backend/databaseLayer/databaseErrorCodes.h"
-#include "backend/databaseLayer/databaseLayer.h"            // ibTxOptions (the lock TX still rides the driver's tpb)
-#include "backend/databaseLayer/databaseLayerException.h"   // a primary-key race arrives as this
-#include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door
+#include "backend/lock/lockFile.h"
+#include "backend/lock/lockKeyHash.h"        // two keys meeting
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"   // HolderOf - the program a holder without a user is named by
 #include "backend/session/sessionSnapshot.h"
 #include "backend/userInfo.h"
 
 #include <algorithm>
-#include <numeric>
+#include <chrono>
+#include <map>
+#include <optional>
 #include <set>
 
 namespace {
 
-// Table name kept here so call sites don't drift. Mirrors the
-// session-registry's sys_session table naming.
-// The header insert lost the primary key. PostgreSQL aborts the transaction
-// on that error, so the caller rolls back and tries the UPDATE, which now
-// finds the row. The decision does not read the message: a server whose
-// lc_messages is not English still reports the same failure.
-struct HeaderAlreadyThere {};
-
-// The header UPDATE met a deadlock or a serialization failure. The caller
-// rolls back and tries again. A noWait acquire does not: it is refused.
-struct HeaderBusy {};
-
-// The driver says what the failure was (the exception's Kind): a deadlock, a serialization failure,
-// an expired lock wait or NOWAIT refused (PostgreSQL 40P01 / 40001 / 55P03; Firebird isc_deadlock,
-// isc_lock_conflict, isc_update_conflict, isc_lock_timeout) all arrive as Deadlock or Timeout.
-bool HeaderWait(const ibDatabaseLayerException& err)
-{
-	using Kind = ibBackendDatabaseException::Kind;
-	return err.GetKind() == Kind::Deadlock || err.GetKind() == Kind::Timeout;
-}
-
-// Hold sys_lock_key for this key until the transaction ends. An UPDATE of the
-// existing row is the lock. A missing row is inserted; a key violation on that
-// insert (Kind::Constraint) is the other connection having inserted it, and the
-// retry updates the row. Any other failure is the caller's, on any attempt.
-void LockKeyHeader(ibDatabaseQueryBuilder& q, const ibString& ns, const ibString& hash,
-	bool noWait, int attempt)
-{
-	int locked = 0;
-	try {
-		locked = q.Execute(ibUpdate(lock_key_table,
-			{ { ibT("namespace"), ibConst(ibValue(ns)) } },
-			ibBinOp(ibQueryBinOp::And,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(ns))),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(hash))))));
-	}
-	catch (const ibDatabaseLayerException& err) {
-		if (!HeaderWait(err))
-			throw;
-		if (noWait)
-			ibBackendLockException::RowLockTimeoutThrow(ns);
-		throw HeaderBusy();
-	}
-	if (locked >= 1)
-		return;
-
-	try {
-		if (q.Execute(ibInsert(lock_key_table, {
-				{ ibT("namespace"), ibConst(ibValue(ns)) },
-				{ ibT("keyHash"),   ibConst(ibValue(hash)) },
-			})) < 1) {
-			ibBackendCoreException::Error(_("ibLockManager: failed to insert the lock key."));
-		}
-	}
-	catch (const ibDatabaseLayerException& err) {
-		if (attempt > 0 || err.GetKind() != ibBackendDatabaseException::Kind::Constraint)
-			throw;
-		throw HeaderAlreadyThere();
-	}
-}
+// Another owner holds a lock the asked one meets — what a refusal names, and the slot a wait is for.
+struct HeldConflict {
+	ibString   object;
+	ibString   user;
+	ibString   session;
+	ibString   computer;
+	ibDateTime since;
+	int        slot = -1;
+};
 
 // WHO HOLDS A LOCK, in the words a person finds them by: the user, else the program on its computer ("Application
 // Workspace on OFFICE-7") - a session nobody logged into has no user, and "another session" left the reader nothing
 // to look for (2026-11-19). The program is the cluster snapshot's own word for the session (GetProgram), a copy taken
-// under a read lock: no base is read and no lock is asked for while this transaction holds its headers.
+// under a read lock: no base is read and no lock is asked for while this holds the file.
 ibString HolderOf(const ibString& user, const ibString& session, const ibString& computer)
 {
 	if (!user.IsEmpty())
@@ -132,13 +76,17 @@ ibString HolderOf(const ibString& user, const ibString& session, const ibString&
 // No Instance() — ibApplicationInstance owns the only instance. Callers
 // reach it through ibApplicationInstance::GetLockManager().
 
-ibLockManager::ibLockManager(ib::AppDataCtorToken owner)
+ibLockManager::ibLockManager(ib::AppDataCtorToken owner) : m_applicationInstance(owner.GetApplicationInstance())
 {
-	// Its holder takes connections from ITS base's pool — named once, here (the base builds the pool first),
-	// never asked of "the current one". The holder dies with the base, after the registry that question is
-	// answered through: unnamed, it asked a freed registry on the way out, and every process crashed on exit
-	// (2026-10-01, ~ibLockManager → GetPool → Current → IsDebugThread).
-	m_lockHolder.SetPool(ibApplicationInstance::GetConnectionPool(owner.GetApplicationInstance()));
+}
+
+ibLockManager::~ibLockManager() = default;
+
+ibLockFile& ibLockManager::File() const
+{
+	if (m_file == nullptr)
+		m_file = std::make_unique<ibLockFile>(m_applicationInstance->ResolveLockFile());
+	return *m_file;
 }
 
 ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
@@ -147,10 +95,6 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 {
 	if (items.empty())
 		return ibLockHandle();   // empty batch → empty handle, no-op
-
-	// Every path that touches the lock table takes this — see ibLockManager::m_mtx: the holder
-	// owns ONE connection and does not serialise the threads that ask it for one.
-	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
 	// Resolve owner identity. Custom holder wins when supplied; else
 	// fall back to the active session. Either is required — no
@@ -174,205 +118,248 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 		ownerName     = session->Identity().m_userName;
 		ownerComputer = session->Identity().m_computer;
 	}
+	const ibString owner = ownerGuid.str();
 
-	// Dedicated holder — Acquire's TX must not piggyback on the
-	// caller's business TX (lock rows must be visible to other
-	// processes the moment Acquire returns, not when the caller
-	// eventually commits).
-	// The lock TX runs on the lock manager's own holder (out of the caller's business TX) — lock rows
-	// must be visible to peer processes the moment Acquire returns. One builder = one borrowed
-	// connection for the whole batch; its scope carries the TX and every statement below.
-	ibDatabaseQueryBuilder q(&m_lockHolder);
-	if (!q.IsOpen()) {
-		ibBackendCoreException::Error(
-			_("ibLockManager::Acquire - database is not open."));
-	}
+	std::vector<ibString> tables;
+	for (const ibLockItem& item : items)
+		tables.push_back(item.namespaceName);
 
-	ibDatabaseLayer::ibTxOptions txOpts;
-	txOpts.noWait = !opts.wait;   // the header wait is this transaction's lock_timeout
+	// The owner's slot while it waits, and its wait forgotten however this ends.
+	int waiting = -1;
+	struct ibWaitEnds {
+		ibLockManager& m_manager;
+		const int&     m_slot;
+		~ibWaitEnds() {
+			if (m_slot < 0)
+				return;
+			try {
+				std::lock_guard<std::recursive_mutex> serialised(m_manager.m_mtx);
+				m_manager.File().SetWaitsFor(m_slot, -1);
+			}
+			catch (...) {}
+		}
+	} const waitEnds{ *this, waiting };
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(opts.timeoutMs > 0 ? opts.timeoutMs : 0);
+	constexpr std::chrono::milliseconds kAskAgain{ 200 };   // how late a held lock is asked for again at most
 
-	// Headers in a stable order, so two batches that name the same keys cannot
-	// each hold the one the other is about to ask for.
-	std::vector<std::size_t> headerOrder(items.size());
-	std::iota(headerOrder.begin(), headerOrder.end(), 0);
-	std::sort(headerOrder.begin(), headerOrder.end(), [&](std::size_t a, std::size_t b) {
-		const int byName = items[a].namespaceName.Cmp(items[b].namespaceName);
-		if (byName != 0)
-			return byName < 0;
-		return items[a].KeyHash().Cmp(items[b].KeyHash()) < 0;
-	});
+	// ⭐ A LOCK ANOTHER OWNER HOLDS IS ASKED FOR AGAIN UNTIL IT FREES, when the caller said how long (timeoutMs) — and
+	// the asking holds m_mtx while the waiting does not: the release it waits for takes the same mutex.
+	for (;;) {
+		HeldConflict met;
+		bool conflicted = false;
+		bool heldHere   = false;   // the holder is an owner of this process: its release wakes m_releaseWake
+		int  ownSlot    = -1;      // this owner's slot when it holds something already — what a deadlock passes through
+		std::uint64_t releasesSeen = 0;
+		ibLockFile* file = nullptr;
+		{
+			std::lock_guard<std::recursive_mutex> serialised(m_mtx);
+			file = &File();
 
-	std::vector<ibGuid> acquired;
-	constexpr int kHeaderAttempts = 5;
+			const auto known = m_owners.find(owner);
+			const bool first = known == m_owners.end();
+			const int slot = first ? file->TakeSlot(ownerGuid, ownerName, ownerComputer) : known->second.first;
 
-	for (int attempt = 0; attempt < kHeaderAttempts; ++attempt) {
-		q.BeginTransaction(txOpts);
-		acquired.clear();
-		try {
-			for (std::size_t index : headerOrder)
-				LockKeyHeader(q, items[index].namespaceName, items[index].KeyHash(),
-					!opts.wait, attempt);
+			std::vector<ibGuid> acquired;
+			std::vector<std::pair<ibString, ibString>> added;   // (lockGuid, namespace)
+			try {
+				file->Change(tables, [&](ibLockFile::ibBatch& batch) {
+					// EVERY KEY ASKED FIRST, the rows written after: a key another owner holds refuses the batch before it
+					// changed anything, and the process keeps its copy of the regions as it was. Only the rows a key may
+					// meet are read (EachOfKey), not every row of its table.
+					std::vector<ibString> keyHashes, keyDatas;
+					std::vector<std::uint64_t> fieldsOf;
+					std::vector<std::optional<ibLockFile::ibRow>> owns(items.size());
+					for (std::size_t n = 0; n < items.size(); ++n) {
+						const ibLockItem& item = items[n];
+						keyHashes.push_back(item.KeyHash());
+						keyDatas.push_back(item.KeyData());
+						fieldsOf.push_back(ibLockKey::FieldsHash(keyDatas.back()));
+						const ibString& keyHash = keyHashes.back();
+						const ibString& keyData = keyDatas.back();
+						const std::uint64_t fields = fieldsOf.back();
+						batch.EachOfKey(item.namespaceName, fields, keyData, [&](const ibLockFile::ibRow& row) {
+							// The owner's own row of the SAME key is re-entry; its other keys never stand in its way.
+							if (row.m_owner == ownerGuid) {
+								if (!owns[n] && row.m_keyHash.Cmp(keyHash) == 0)
+									owns[n] = row;
+								return;
+							}
+							// Keys of the same fields — every write of one table — meet only as one text: two integers and
+							// a compare that parts at the first value, where Overlap read both texts.
+							if ((row.m_mode == ibLockMode::Exclusive || item.lockMode == ibLockMode::Exclusive)
+							    && (row.m_fieldsHash == fields ? row.m_keyData.CmpNoCase(keyData) == 0
+							                                   : ibLockKey::Overlap(keyData, row.m_keyData))) {
+								const ibLockFile::ibOwner holder = file->ReadSlot(row.m_slot);
+								throw HeldConflict{ item.objectName.IsEmpty() ? item.namespaceName : item.objectName,
+								                    holder.m_user, row.m_owner.str(), holder.m_computer, row.m_since, row.m_slot };
+							}
+						});
+					}
 
-			const ibString ownerGuidStr = ownerGuid.str();
-			const ibDateTime now = ibDateTime::Now();
-
-			for (const auto& item : items) {
-				const ibString& keyHash = item.KeyHash();
-				const ibString& keyData = item.KeyData();
-
-				bool       ownExisting = false;
-				ibGuid     ownExistingGuid;
-				ibLockMode ownExistingMode = ibLockMode::Shared;
-				bool       conflictHit = false;
-				ibString   conflictUser;
-				ibString   conflictSession;
-				ibString   conflictComputer;
-				ibDateTime conflictSince;
-				{
-					ibQueryIR ir(ibProject(
-						ibFilter(ibScan(lock_table),
-							ibBinOp(ibQueryBinOp::And,
-								ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(item.namespaceName))),
-								ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(keyHash))))),
-						{ { ibCol(ibT("lockGuid")),    ibEmptyString },
-						  { ibCol(ibT("sessionGuid")), ibEmptyString },
-						  { ibCol(ibT("userName")),    ibEmptyString },
-						  { ibCol(ibT("computer")),    ibEmptyString },
-						  { ibCol(ibT("acquiredAt")),  ibEmptyString },
-						  { ibCol(ibT("lockMode")),    ibEmptyString } }));
-
-					// The cursor must be released before the INSERT/UPDATE on the same connection.
-					ibQueryResult rs = q.ExecuteIR(ir);
-					while (rs.Next()) {
-						const ibString otherSess  = rs.GetResultString(ibT("sessionGuid"));
-						const ibString otherUser  = rs.GetResultString(ibT("userName"));
-						const ibLockMode otherMode =
-							static_cast<ibLockMode>(rs.GetResultInt(ibT("lockMode")));
-
-						if (otherSess.CmpNoCase(ownerGuidStr) == 0) {
-							// The first own row is the one an upgrade writes. Same-owner
-							// duplicates should not happen — Acquire inserts one.
-							if (!ownExisting)
-								ownExistingGuid = ibGuid(rs.GetResultString(ibT("lockGuid")));
-							ownExisting     = true;
-							ownExistingMode = otherMode;
+					const ibDateTime now = ibDateTime::Now();
+					std::map<std::pair<ibString, ibString>, std::pair<ibGuid, ibLockMode>> written;   // (table, key hash) → its row
+					for (std::size_t n = 0; n < items.size(); ++n) {
+						const ibLockItem& item = items[n];
+						const auto same = written.find({ item.namespaceName, keyHashes[n] });
+						if (owns[n] || same != written.end()) {
+							// The owner's own row of that key — held before, or written for this batch: the same key asked
+							// twice in one batch is one row.
+							std::pair<ibGuid, ibLockMode> own = owns[n] ? std::make_pair(owns[n]->m_lockGuid, owns[n]->m_mode)
+							                                            : same->second;
+							if (item.lockMode > own.second && opts.allowUpgrade) {
+								batch.SetMode(own.first, item.lockMode);   // S → X on the row already held, its guid kept
+								own.second = item.lockMode;
+							}
+							written[{ item.namespaceName, keyHashes[n] }] = own;
 							continue;
 						}
-
-						if (otherMode == ibLockMode::Exclusive ||
-						    item.lockMode == ibLockMode::Exclusive)
-						{
-							conflictHit      = true;
-							conflictUser     = otherUser;
-							conflictSession  = otherSess;
-							conflictComputer = rs.GetResultString(ibT("computer"));
-							conflictSince    = rs.GetResultDate(ibT("acquiredAt"));
-							break;
-						}
+						ibLockFile::ibRow mine;
+						mine.m_lockGuid  = ibNewUniqueGuid;
+						mine.m_owner     = ownerGuid;
+						mine.m_slot      = slot;
+						mine.m_mode      = item.lockMode;
+						mine.m_since     = now;
+						mine.m_namespace = item.namespaceName;
+						mine.m_keyHash   = keyHashes[n];
+						mine.m_keyData   = keyDatas[n];
+						mine.m_fieldsHash = fieldsOf[n];
+						acquired.push_back(mine.m_lockGuid);
+						added.emplace_back(mine.m_lockGuid.str(), item.namespaceName);
+						written[{ item.namespaceName, keyHashes[n] }] = { mine.m_lockGuid, mine.m_mode };
+						batch.Add(std::move(mine));
 					}
-				}
-
-				if (conflictHit)
-					ibBackendLockException::LockConflictThrow(
-						item.objectName.IsEmpty() ? item.namespaceName : item.objectName,
-						HolderOf(conflictUser, conflictSession, conflictComputer), conflictSince);
-
-				if (ownExisting) {
-					if (item.lockMode > ownExistingMode && opts.allowUpgrade) {
-						// S → X on the row we already hold. The guid has to be the one
-						// just read — an empty guid updates nothing and leaves the lock shared.
-						const int updated = q.Execute(ibUpdate(lock_table,
-							{ { ibT("lockMode"), ibConst(ibValue(static_cast<int>(item.lockMode))) } },
-							ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("lockGuid")),
-							        ibConst(ibValue(ownExistingGuid.str())))));
-						if (updated < 1)
-							ibBackendCoreException::Error(
-								_("ibLockManager: failed to upgrade the held lock."));
-					}
-					continue;
-				}
-
-				const ibGuid newGuid = ibNewUniqueGuid;
-				if (q.Execute(ibInsert(lock_table, {
-						{ ibT("lockGuid"),    ibConst(ibValue(newGuid.str())) },
-						{ ibT("sessionGuid"), ibConst(ibValue(ownerGuidStr)) },
-						{ ibT("namespace"),   ibConst(ibValue(item.namespaceName)) },
-						{ ibT("keyHash"),     ibConst(ibValue(keyHash)) },
-						{ ibT("keyData"),     ibConst(ibValue(keyData)) },
-						{ ibT("lockMode"),    ibConst(ibValue(static_cast<int>(item.lockMode))) },
-						{ ibT("acquiredAt"),  ibConst(ibValue(now)) },
-						{ ibT("userName"),    ibConst(ibValue(ownerName)) },
-						{ ibT("computer"),    ibConst(ibValue(ownerComputer)) },
-					})) < 1) {
-					ibBackendCoreException::Error(
-						_("ibLockManager: failed to insert sys_lock row."));
-				}
-				acquired.push_back(newGuid);
+				});
+			}
+			catch (const HeldConflict& conflict) {
+				if (first)
+					file->FreeSlot(slot);
+				met          = conflict;
+				conflicted   = true;
+				heldHere     = m_owners.contains(conflict.session);
+				ownSlot      = first ? -1 : slot;
+				releasesSeen = m_releaseCount;
+			}
+			catch (...) {
+				if (first)
+					file->FreeSlot(slot);
+				throw;
 			}
 
-			q.Commit();
-			return ibLockHandle(std::move(acquired), ownerGuid);
+			if (!conflicted) {
+				for (const auto& [guid, ns] : added)
+					m_rows[guid] = { owner, ns };
+				if (!first || !added.empty()) {
+					std::pair<int, std::size_t>& held = m_owners[owner];
+					held.first   = slot;
+					held.second += added.size();
+				}
+				else
+					file->FreeSlot(slot);
+				return ibLockHandle(std::move(acquired), ownerGuid);
+			}
 		}
-		catch (const HeaderAlreadyThere&) {
-			if (q.IsActiveTransaction())
-				q.RollBack();
-			// The other connection inserted the header and may still hold it.
-			// The next attempt updates that row and waits with the transaction.
+
+		if (std::chrono::steady_clock::now() >= deadline)
+			ibBackendLockException::LockConflictThrow(met.object, HolderOf(met.user, met.session, met.computer), met.since);
+		if (ownSlot >= 0) {
+			waiting = ownSlot;
+			if (WaitsForItself(ownSlot, met.slot))
+				ibBackendLockException::DeadlockThrow(met.object, HolderOf(met.user, met.session, met.computer));
 		}
-		catch (const HeaderBusy&) {
-			if (q.IsActiveTransaction())
-				q.RollBack();
-			// Deadlock or serialization on the header. The next attempt asks again.
-			// noWait never arrives here: it was refused as a lock exception.
+		const auto until = std::min(deadline, std::chrono::steady_clock::now() + kAskAgain);
+		if (heldHere) {
+			std::unique_lock<std::recursive_mutex> asleep(m_mtx);
+			m_releaseWake.wait_until(asleep, until, [this, releasesSeen] { return m_releaseCount != releasesSeen; });
 		}
-		catch (const ibCoreException&) {
-			if (q.IsActiveTransaction())
-				q.RollBack();
-			throw;
+		else {
+			const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(until - std::chrono::steady_clock::now());
+			file->WaitForRelease(met.slot, static_cast<std::int32_t>(std::max<long long>(left.count(), 1)));
 		}
 	}
+}
 
-	ibBackendCoreException::Error(_("ibLockManager: the lock header stayed busy."));
+bool ibLockManager::WaitsForItself(int waiter, int holder)
+{
+	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
+	ibLockFile& file = File();
+	file.SetWaitsFor(waiter, holder);
+	// Down the chain from the holder: whom it waits for, and whom that one waits for — back to the waiter is a cycle.
+	// A slot met twice ends it: a cycle that does not pass the waiter cannot loop here.
+	std::set<int> met;
+	for (int at = holder; at >= 0 && met.insert(at).second;) {
+		if (at == waiter) {
+			ibJournalInfo(ibT("lock"), ibT("deadlock: slot %d waits for slot %d, which waits for it - refused at once"), waiter, holder);
+			return true;
+		}
+		const ibLockFile::ibOwner next = file.ReadSlot(at);
+		if (!next.m_used)
+			return false;
+		at = next.m_waitsFor;
+	}
+	return false;
+}
+
+void ibLockManager::Forget(const std::set<ibString>& lockGuids)
+{
+	for (const ibString& guid : lockGuids) {
+		const auto row = m_rows.find(guid);
+		if (row == m_rows.end())
+			continue;
+		const auto held = m_owners.find(row->second.first);
+		m_rows.erase(row);
+		if (held != m_owners.end() && --held->second.second == 0) {
+			File().FreeSlot(held->second.first);
+			m_owners.erase(held);
+		}
+	}
+}
+
+void ibLockManager::ForgetOwner(const ibString& owner)
+{
+	std::erase_if(m_rows, [&owner](const auto& row) { return row.second.first == owner; });
+	const auto held = m_owners.find(owner);
+	if (held == m_owners.end())
+		return;
+	File().FreeSlot(held->second.first);
+	m_owners.erase(held);
 }
 
 void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 {
-	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
-	// holder owns ONE connection and does not serialise the threads that ask it for one.
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
 	if (lockGuids.empty())
 		return;
 
-	// The whole thing is inside the try, transaction calls included. They were
-	// outside it, and BeginTransaction and Commit throw like everything else in
-	// the database layer: a shutdown with a document still open crashed the web
-	// server here twice on 2026-09-07, because the exception left this function,
-	// left ibLockHandle::Release, and reached the destructor that called it,
-	// where an escaping exception is std::terminate.
-	//
-	// Swallowing is the contract, not a shortcut: releasing a lock row is
-	// best-effort, and a row that survives is collected by the zombie sweep.
-	// The key header is not deleted here. The next acquire locks the same row.
+	// Swallowing is the contract, not a shortcut: releasing a lock is best-effort — a row that survives goes with its
+	// owner's end or its process's — and this runs from destructors, where an exception is std::terminate (a shutdown
+	// with a document still open crashed the web server so twice on 2026-09-07).
 	try {
-		ibDatabaseQueryBuilder q(&m_lockHolder);
-		if (!q.IsOpen())
-			return;  // DB closed — process shutdown
-
-		q.BeginTransaction();
-		try {
-			std::vector<ibQueryExprPtr> guids;
-			guids.reserve(lockGuids.size());
-			for (const auto& g : lockGuids)
-				guids.push_back(ibConst(ibValue(g.str())));
-			q.Execute(ibDelete(lock_table, ibIn(ibCol(ibT("lockGuid")), std::move(guids))));
+		std::set<ibString> guids;
+		std::vector<ibString> tables;
+		bool unknown = false;   // a row this process does not hold: an administrator's release — every region asked
+		for (const ibGuid& g : lockGuids) {
+			const ibString guid = g.str();
+			guids.insert(guid);
+			const auto row = m_rows.find(guid);
+			if (row == m_rows.end())
+				unknown = true;
+			else
+				tables.push_back(row->second.second);
 		}
-		catch (const ibCoreException&) {
-			if (q.IsActiveTransaction())
-				q.RollBack();
-			return;
-		}
-		q.Commit();
+		const auto drop = [&guids](std::vector<ibLockFile::ibRow>& rows) {
+			return std::erase_if(rows, [&guids](const ibLockFile::ibRow& row) { return guids.contains(row.m_lockGuid.str()); }) > 0;
+		};
+		if (unknown)
+			File().ChangeEach(drop);
+		else
+			File().Change(tables, [&lockGuids](ibLockFile::ibBatch& batch) {
+				for (const ibGuid& guid : lockGuids)
+					batch.Remove(guid);
+			});
+		Forget(guids);
+		++m_releaseCount;
+		m_releaseWake.notify_all();
 	}
 	catch (const ibCoreException& err) {
 		ibJournalInfo(ibT("lock"), ibT("release of %d row(s) did not complete: %s"),
@@ -386,163 +373,73 @@ void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
 
 void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 {
-	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
-	// holder owns ONE connection and does not serialise the threads that ask it for one.
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
 	if (!sessionGuid.isValid())
 		return;
-
-	ibDatabaseQueryBuilder q(&m_lockHolder);
-	if (!q.IsOpen())
-		return;
-
-	// Called from the registry thread (Remove and the stale sweep). A delete that waits
-	// for a lock sits in front of Add; a row still held is left for the next tick.
-	ibDbTxOptions opts;
-	opts.noWait = true;
-	q.BeginTransaction(opts);
 	try {
-		q.Execute(ibDelete(lock_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("sessionGuid")), ibConst(ibValue(sessionGuid.str())))));
+		File().ChangeEach([&sessionGuid](std::vector<ibLockFile::ibRow>& rows) {
+			return std::erase_if(rows, [&sessionGuid](const ibLockFile::ibRow& row) { return row.m_owner == sessionGuid; }) > 0;
+		});
+		ForgetOwner(sessionGuid.str());
+		++m_releaseCount;
+		m_releaseWake.notify_all();
 	}
-	catch (const ibCoreException&) {
-		if (q.IsActiveTransaction())
-			q.RollBack();
-		return;
-	}
-	q.Commit();
+	catch (...) { /* best-effort: the next sweep tick finds the rows again */ }
 }
 
 void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 {
-	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
-	// holder owns ONE connection and does not serialise the threads that ask it for one.
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
-
-	ibDatabaseQueryBuilder q(&m_lockHolder);
-	if (!q.IsOpen())
-		return;
 
 	std::set<ibString> live;
 	for (const ibGuid& g : liveSessionGuids)
 		live.insert(g.str());
 
-	// Read the owners first, delete after — the DELETE runs per owner through
-	// OnSessionEnd, which owns its own TX. Distinct owners, so a session holding
-	// several locks is one DELETE, not one per row.
-	// The read is on the registry thread too. noWait so preparing it cannot sit
-	// out the driver's lock timeout while an apply holds metadata.
 	std::set<ibString> orphans;
 	try {
-		ibDbTxOptions opts;
-		opts.noWait = true;
-		q.BeginTransaction(opts);
-		{
-			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_table),
-				{ { ibCol(ibT("sessionGuid")), ibEmptyString } })));
-			while (rs.Next()) {
-				const ibString owner = rs.GetResultString(ibT("sessionGuid"));
-				if (!owner.IsEmpty() && !live.contains(owner))
-					orphans.insert(owner);
-			}
-		}
-		q.Commit();
+		File().ChangeEach([&live, &orphans](std::vector<ibLockFile::ibRow>& rows) {
+			return std::erase_if(rows, [&live, &orphans](const ibLockFile::ibRow& row) {
+				const ibString owner = row.m_owner.str();
+				if (live.contains(owner))
+					return false;
+				orphans.insert(owner);
+				return true;
+			}) > 0;
+		});
 	}
-	catch (const ibCoreException&) {
-		if (q.IsActiveTransaction())
-			q.RollBack();
-		return;   // transient DB error, or the table is locked — the next sweep tick retries
+	catch (...) {
+		return;   // the file held or failing — the next sweep tick retries
 	}
-
 	for (const ibString& owner : orphans)
-		OnSessionEnd(ibGuid(owner));
-
-	// A header with nobody holding the key is only a row. Re-creation is the
-	// same insert the first acquire does, and the primary key plus the retry
-	// serialise it, so dropping these cannot grant a key twice.
-	std::vector<std::pair<ibString, ibString>> headers;
-	try {
-		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_key_table),
-			{ { ibCol(ibT("namespace")), ibEmptyString },
-			  { ibCol(ibT("keyHash")),   ibEmptyString } })));
-		while (rs.Next())
-			headers.emplace_back(rs.GetResultString(ibT("namespace")), rs.GetResultString(ibT("keyHash")));
-	}
-	catch (const ibCoreException&) {
-		return;
-	}
-
-	// ⚠ HELD IS ALSO A HELD ROW, and that is not in sys_lock: an acquire holds its header by an UPDATE before its sys_lock
-	// row is written, and a compile holds its module's header the whole compile and writes none (the row lock, byteCodeCache.cpp).
-	// So each header goes in a transaction of its own that does not wait, as OnSessionEnd's delete does on this thread, and a
-	// held one is left for the next tick while the rest are swept. The DELETE waited behind a starting client's compile, then
-	// gave up the whole sweep with "update conflicts with concurrent update" (2026-11-05).
-	for (const auto& header : headers) {
-		const ibQueryExprPtr key = ibBinOp(ibQueryBinOp::And,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(header.first))),
-			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(header.second))));
-		ibDbTxOptions opts;
-		opts.noWait = true;
-		try {
-			q.BeginTransaction(opts);
-			bool held = false;
-			{
-				ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibFilter(ibScan(lock_table), key),
-					{ { ibCol(ibT("namespace")), ibT("n") } })));
-				held = rs.Next();
-			}
-			if (!held)
-				q.Execute(ibDelete(lock_key_table, key));
-			q.Commit();
-		}
-		catch (const ibDatabaseLayerException& err) {
-			if (q.IsActiveTransaction())
-				q.RollBack();
-			if (!HeaderWait(err))
-				return;   // not a held row but the database failing: the next tick tries again
-		}
-		catch (const ibCoreException&) {
-			if (q.IsActiveTransaction())
-				q.RollBack();
-			return;
-		}
+		ForgetOwner(owner);
+	if (!orphans.empty()) {
+		++m_releaseCount;
+		m_releaseWake.notify_all();
 	}
 }
 
 std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
 {
-	// Every path that touches the lock table takes this - see ibLockManager::m_mtx: the
-	// holder owns ONE connection and does not serialise the threads that ask it for one.
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
 	std::vector<ibLockSnapshotRow> rows;
-
-	ibDatabaseQueryBuilder q(&m_lockHolder);
-	if (!q.IsOpen())
-		return rows;
-
-	// Read-only — no TX needed; default isolation gives us latest committed state from other processes.
 	try {
-		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_table),
-			{ { ibCol(ibT("lockGuid")),    ibEmptyString },
-			  { ibCol(ibT("sessionGuid")), ibEmptyString },
-			  { ibCol(ibT("namespace")),   ibEmptyString },
-			  { ibCol(ibT("keyData")),     ibEmptyString },
-			  { ibCol(ibT("lockMode")),    ibEmptyString },
-			  { ibCol(ibT("acquiredAt")),  ibEmptyString },
-			  { ibCol(ibT("userName")),    ibEmptyString },
-			  { ibCol(ibT("computer")),    ibEmptyString } })));
-		while (rs.Next()) {
+		ibLockFile& file = File();
+		std::map<int, ibLockFile::ibOwner> owners;   // a slot read once
+		for (const ibLockFile::ibRow& row : file.ReadAll()) {
+			auto holder = owners.find(row.m_slot);
+			if (holder == owners.end())
+				holder = owners.emplace(row.m_slot, file.ReadSlot(row.m_slot)).first;
 			ibLockSnapshotRow r;
-			r.lockGuid      = ibGuid(rs.GetResultString(ibT("lockGuid")));
-			r.sessionGuid   = ibGuid(rs.GetResultString(ibT("sessionGuid")));
-			r.namespaceName = rs.GetResultString(ibT("namespace"));
-			r.keyData       = rs.GetResultString(ibT("keyData"));
-			r.lockMode      = static_cast<ibLockMode>(rs.GetResultInt(ibT("lockMode")));
-			r.acquiredAt    = rs.GetResultDate(ibT("acquiredAt"));
-			r.userName      = rs.GetResultString(ibT("userName"));
-			r.computer      = rs.GetResultString(ibT("computer"));
+			r.lockGuid      = row.m_lockGuid;
+			r.sessionGuid   = row.m_owner;
+			r.namespaceName = row.m_namespace;
+			r.keyData       = row.m_keyData;
+			r.lockMode      = row.m_mode;
+			r.acquiredAt    = row.m_since;
+			r.userName      = holder->second.m_user;
+			r.computer      = holder->second.m_computer;
 			rows.push_back(std::move(r));
 		}
 	}

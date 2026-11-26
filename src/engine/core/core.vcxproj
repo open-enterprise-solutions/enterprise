@@ -193,6 +193,7 @@
     <ClCompile Include="dynamicLibrary.cpp" />
     <ClCompile Include="fileConfig.cpp" />
     <ClCompile Include="fileSystem.cpp" />
+    <ClCompile Include="sharedFile.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="inputMask.cpp" />
@@ -330,6 +331,7 @@
     <ClInclude Include="dynamicLibrary.h" />
     <ClInclude Include="fileConfig.h" />
     <ClInclude Include="fileSystem.h" />
+    <ClInclude Include="sharedFile.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="inputMask.h" />
@@ -341,6 +343,7 @@
     <ClInclude Include="graphics\picture.h" />
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="guid.h" />
+    <ClInclude Include="hash.h" />
     <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="localization\dictionary.h" />
     <ClInclude Include="localization\languageTable.h" />

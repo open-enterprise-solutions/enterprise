@@ -2271,7 +2271,7 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 					case KEY_WHERE: case KEY_GROUP: case KEY_BY: case KEY_INTO:
 					case KEY_ORDERBY: case KEY_ASCENDING: case KEY_DESCENDING:
 					case KEY_TAKE: case KEY_SKIP: case KEY_DISTINCT: case KEY_SELECT:
-					case KEY_RESTRICT:
+					case KEY_RESTRICT: case KEY_LOCK: case KEY_SHARED:
 						last = lex.m_numData;
 						break;
 					default: break;
@@ -2322,7 +2322,7 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 			// the rest of the language resumes where the query ends.
 			if (!insideQuery && !insideRestrict) {
 				for (int key = 0; key < LastKeyWord; key++) {
-					if (key >= KEY_FROM && key <= KEY_RESTRICT)
+					if (key >= KEY_FROM && key <= KEY_SHARED)
 						continue;
 					offerKeyword(key);
 				}

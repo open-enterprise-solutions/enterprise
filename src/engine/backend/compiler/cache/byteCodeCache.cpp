@@ -15,6 +15,8 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
+#include "backend/lock/lockManager.h"   // a module compiled once, whoever else misses meanwhile
+#include "backend/session/session.h"
 #include "core/memory/memoryStream.h"
 #include "core/utils/md5.hpp"      // the key is digested to the width its column declares
 #include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — one half of the engine key
@@ -138,97 +140,27 @@ void WriteRow(ibDatabaseQueryBuilder& q, const ibByteCode& bc, const ibMemoryBuf
 // ⭐ A MODULE NOBODY HAS COMPILED YET IS COMPILED ONCE, WHOEVER ELSE ASKS MEANWHILE. Ten sessions
 // entering a base whose cache is empty all miss, and without this all ten compile the same module.
 //
-// The first to miss holds the module's key in sys_lock_key, the mutex for one key (lockManager.cpp):
-// an UPDATE of its row, not committed, on a connection of its own, so it holds nothing of its session's.
-// The others' updates stand behind that row in the database. Saved, the transaction commits with the
-// cache row in it, the next one gets the key and reads what was saved. Not saved — the compile failed,
-// the session died — the transaction goes back, and the next one finds no row in the cache and compiles.
-//
-// ⚠ HELD ACROSS THE COMPILE ONLY, in the scope of that compile (Load with `compile`). Its transaction takes the
-// thread's db_query channel when that is free (ibConnectionPool::SetActiveTxConnection), so what this thread
-// reads meanwhile goes through it. A compile writes nothing, which is what makes that harmless.
-class ibRowLock {
-public:
-	// Waits for the key and holds it; if the database could not be asked, holds nothing. Either way
-	// read the cache again: somebody may have finished meanwhile, and a miss then compiles.
-	void Acquire(const ibGuid& descId, const ibString& configDigest);
-	// Writes the row and lets it go. false — nothing is held, or the write failed.
-	bool Save(const ibByteCode& bc);
-private:
-	// The connection first: it outlives the builder on it, and the builder's going rolls back what is not committed.
-	struct ibHeld {
-		ibSingleConnectionHolder m_holder;
-		ibDatabaseQueryBuilder   m_query{ &m_holder };
-		ibString                 m_applicationMd5;
-	};
-	std::unique_ptr<ibHeld> m_held;
-};
-
-void ibRowLock::Acquire(const ibGuid& descId, const ibString& configDigest)
+// The first to miss holds the module's key in the base's lock file (ibLockManager, `Bytecode` by `Module`), exclusive,
+// for as long as it compiles and saves; the others wait for it there and then read what was saved. Not saved — the
+// compile failed — the key goes all the same, and the next one finds no row in the cache and compiles. The session
+// holds it, or the compile itself when there is none. A wait that runs out, a base whose locks cannot be asked: this
+// compile goes unheld, and the cache is disposable.
+ibLockHandle HoldModule(const ibGuid& descId)
 {
-	if (db_query == nullptr) return;
-
-	const ibString kind = ibT("bytecode");
-	const ibString key = descId;
+	ibLockManager* const locks = ibApplicationInstance::GetLockManager(ibApplicationInstance::Get(false));
+	if (locks == nullptr)
+		return ibLockHandle();
+	ibLockOptions opts;
+	opts.timeoutMs = kLockWaitMs;
 	try {
-		std::unique_ptr<ibHeld> held = std::make_unique<ibHeld>();
-		held->m_applicationMd5 = ibByteCodeCache::CacheKey(configDigest);
-		ibDatabaseQueryBuilder& q = held->m_query;
-		if (!q.IsOpen() || !q.TableExists(lock_key_table))
-			return;   // the same connection asks — see Load
-
-		constexpr int kAttempts = 5;
-		for (int attempt = 0; attempt < kAttempts; ++attempt) {
-			// A WAITING transaction — the waiting is what this is for. What it stands behind is another compile
-			// of this module, on a connection of its own, so it ends with that compile and never with somebody's
-			// business transaction (see Save).
-			q.BeginTransaction();
-			if (q.Execute(ibUpdate(lock_key_table,
-					{ { ibT("namespace"), ibConst(ibValue(kind)) } },
-					ibBinOp(ibQueryBinOp::And,
-						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(kind))),
-						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(key)))))) >= 1) {
-				m_held = std::move(held);
-				return;
-			}
-			q.RollBack();
-
-			// ⚠ THE MISSING ROW IS MADE APART, NEVER WAITING, AND COMMITTED AT ONCE. Sessions missing together each
-			// inserted it and waited for the others' inserts to end: each stood behind all the rest until the
-			// driver's 30-second lock timeout, once per module (5 operators, 12:35:08 → 12:36:08, 2026-10-31). A
-			// conflict here is somebody else making the row; the next round stands behind it.
-			ibDatabaseLayer::ibTxOptions txOpts;
-			txOpts.noWait = true;
-			q.BeginTransaction(txOpts);
-			try {
-				q.Execute(ibInsert(lock_key_table, {
-					{ ibT("namespace"), ibConst(ibValue(kind)) },
-					{ ibT("keyHash"),   ibConst(ibValue(key)) },
-				}));
-				q.Commit();
-			}
-			catch (const ibDatabaseLayerException&) {
-				if (q.IsActiveTransaction())
-					q.RollBack();
-			}
-		}
+		std::vector<ibLockItem> key{ ibLockItem::ForNamespace(ibT("Bytecode")) };
+		key.front().keyFields.push_back({ ibT("Module"), ibValue(descId.str()) });   // one table, a key a module
+		if (ibSession::Current() != nullptr)
+			return locks->Acquire(key, opts);
+		ibSingleLockHolder compile(ibT("Compile"));
+		return locks->Acquire(key, opts, &compile);
 	}
-	catch (...) {}   // an expired wait, no database: this compile goes unheld, and the cache is disposable
-}
-
-bool ibRowLock::Save(const ibByteCode& bc)
-{
-	// The row goes either way: committed with what was written, or back with the transaction.
-	const std::unique_ptr<ibHeld> held = std::move(m_held);
-	if (held == nullptr) return false;
-
-	ibWriterMemory writer;
-	if (!bc.SerializeAOT(writer)) return false;   // not cacheable: the next one compiles for itself
-	try {
-		WriteRow(held->m_query, bc, writer.buffer(), held->m_applicationMd5);
-	}
-	catch (...) { return false; }
-	return true;
+	catch (...) { return ibLockHandle(); }
 }
 
 // The row of `descId` under `configMd5`; empty when there is none, or when the base could not be asked — the cache is
@@ -304,8 +236,7 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const ibString& configDigest)
 	// UPSERT via DELETE-then-INSERT (uniform across drivers; FB has no ON
 	// CONFLICT). Both statements run on one builder = one connection.
 	//
-	// ⭐⭐ ON A CONNECTION OF ITS OWN, IN A TRANSACTION OF ITS OWN, AND NEVER WAITING — the lock
-	// manager's rule (lockManager.h, m_lockHolder), for the same reason. The cache is disposable: a
+	// ⭐⭐ ON A CONNECTION OF ITS OWN, IN A TRANSACTION OF ITS OWN, AND NEVER WAITING. The cache is disposable: a
 	// save that does not happen costs one recompile. It was written through the SESSION's connection,
 	// which is to say inside whatever business transaction happened to be open when a module was first
 	// compiled — and that transaction then held the cache row until it committed. Every other session
@@ -380,16 +311,14 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const ibStri
 	if (Load(outBc, descId, configDigest))
 		return true;
 
-	// A miss holds the module's key: whoever misses with it stands in the database until this compile has saved it,
-	// and reads it then. Let go on the way out if the compile did not get as far as the save, and the next one compiles.
-	ibRowLock rowLock;
-	rowLock.Acquire(descId, configDigest);
+	// A miss holds the module's key: whoever misses with it waits until this compile has saved it, and reads it then.
+	// Let go on the way out, saved or not.
+	const ibLockHandle held = HoldModule(descId);
 	if (Load(outBc, descId, configDigest))
 		return true;
 	if (!compile(outBc))
 		return false;
-	if (!rowLock.Save(outBc))
-		Save(outBc, configDigest);
+	Save(outBc, configDigest);
 	return true;
 }
 

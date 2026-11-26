@@ -1,23 +1,25 @@
 /////////////////////////////////////////////////////////////////////////////
-// ibLockManager — process-wide singleton coordinating long-held
-// pessimistic locks through the sys_lock app-table.
+// ibLockManager — the base's long-held pessimistic locks, kept in its lock
+// file (ibLockFile: `sys.locks` in the base's folder, every process of the
+// base holding it open).
 //
 // Use cases (driven from outside this layer):
 //   - Form-open auto-acquire: held across many TXs until form close
 //     (covered in Phase B.3 of the record-locks plan).
-//   - Script-driven explicit lock via `New DataLock` (Phase B.4).
+//   - The query's LOCK: keys on a table's VALUES, held until the
+//     business transaction ends (its handle is that transaction's
+//     ticket, ibDatabaseLayer::AddTicket).
+//   - A job's claim, a compile's module, the web addresses' row.
 //   - Admin force-release / "who holds what" snapshot (Phase B.5).
 //
-// What this is NOT for: short TX-scoped writer serialization — that's
-// already covered by DB-level row locks (SELECT FOR UPDATE / WITH
-// LOCK) in record-locks Phase 5-7. sys_lock is exclusively for locks
-// that need to live longer than a transaction.
+// The row a write touches is still serialized by the DB row lock
+// (record-locks Phase 5-7). This holds values — keys a row may not
+// have yet.
 //
-// Cluster-aware via the DB table — multiple
-// processes on one .fdb see each other's sys_lock rows. Cleanup on
-// session end / zombie sweep handled by ibSessionRegistry (Phase B.2).
-//
-// See docs/private/record-locks.md.
+// One file per base, so every process of it — a file base's clients, a
+// cluster's workers — sees the same locks, and none of them is a row of the
+// base: the DBMS takes no part (record-locks.md, stage 19, measured: a lock
+// kept in a table was one transaction and commit apiece, one at a time).
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef _IB_LOCK_MANAGER_H_
@@ -27,18 +29,24 @@
 #include "backend/lock/lockTypes.h"
 #include "backend/lock/lockHandle.h"
 #include "backend/lock/lockHolder.h"
-#include "backend/databaseLayer/connectionHolder.h"
 
+#include <condition_variable>
+#include <cstdint>
+#include <map>
+#include <memory>
 #include <mutex>
+#include <set>
 #include <vector>
 
-// Snapshot row — one per held sys_lock entry. Returned by GetSnapshot
+class ibLockFile;
+
+// Snapshot row — one per held lock. Returned by GetSnapshot
 // for admin UI / /admin/locks endpoint (wired in Phase B.5).
 struct BACKEND_API ibLockSnapshotRow {
 	ibGuid       lockGuid;
 	ibGuid       sessionGuid;
 	ibString     namespaceName;
-	ibString     keyData;          // human-readable canonical key
+	ibString     keyData;          // the key: "field=<value hash>;…" (ibLockKey::Canonicalize)
 	ibLockMode   lockMode;
 	ibDateTime   acquiredAt;
 	ibString     userName;
@@ -57,8 +65,10 @@ public:
 
 	// Acquire a batch of locks atomically — either all granted or
 	// none (throws on conflict). Throws ibBackendLockException::
-	// LockConflict if any item collides with another owner's lock;
-	// throws ibBackendCoreException for DB / type errors.
+	// LockConflict if any item collides with another owner's lock —
+	// their keys meet (ibLockKey::Overlap) and either is Exclusive — at
+	// once, or after opts.timeoutMs of asking again when that is given;
+	// throws ibBackendCoreException when the lock file cannot be used.
 	//
 	// Owner identity (the holder) decides what counts as same-owner
 	// re-entry:
@@ -74,7 +84,7 @@ public:
 	// (default true), X→S = no-op (X dominates).
 	//
 	// Caller may pass empty items vector — returns an empty handle,
-	// no DB hit.
+	// the file untouched.
 	ibLockHandle Acquire(const std::vector<ibLockItem>& items,
 	                      const ibLockOptions&           opts        = {},
 	                      ibLockHolder*                  customHolder = nullptr);
@@ -86,8 +96,7 @@ public:
 	void ReleaseRows(const std::vector<ibGuid>& lockGuids);
 
 	// Hook for ibSessionRegistry::ProcessRemove — drops every lock
-	// row owned by the dying session in one DELETE. Wired in Phase
-	// B.2. No-op safe to call from anywhere.
+	// row owned by the dying session. No-op safe to call from anywhere.
 	void OnSessionEnd(const ibGuid& sessionGuid);
 
 	// Drop every lock row whose owner is NOT in the live session list —
@@ -105,7 +114,8 @@ public:
 	//
 	// A lock whose session is missing is unambiguous: a session row is
 	// written when the session starts, long before it can take a lock,
-	// so it cannot be a lock racing ahead of its own registration.
+	// so it cannot be a lock racing ahead of its own registration. (A
+	// process that died is found sooner, by its slot's byte — lockFile.h.)
 	void SweepOrphans(const std::vector<ibGuid>& liveSessionGuids);
 
 	// Cluster snapshot for admin UI / /admin/locks. Returns a copy;
@@ -118,7 +128,7 @@ public:
 	// friend). ctor stays private — that's where the owner-only rule
 	// matters; allowing delete on a managed pointer doesn't reopen the
 	// construction path.
-	~ibLockManager() = default;
+	~ibLockManager();
 
 	// Construction restricted to ibApplicationInstance via the
 	// ib::AppDataCtorToken gate — appData is the owning coordinator;
@@ -129,30 +139,36 @@ private:
 	ibLockManager(const ibLockManager&) = delete;
 	ibLockManager& operator=(const ibLockManager&) = delete;
 
-	// Dedicated connection-holder so Acquire-TX never piggybacks on
-	// the caller's business TX — lock rows must commit immediately
-	// (so other processes see them) regardless of whether the
-	// caller's business TX commits later. See connection-pool.md
-	// for the holder/scope discipline.
-	mutable ibSingleConnectionHolder m_lockHolder;
+	// The base's lock file, opened on the first use: where it is (ResolveLockFile) is known once the base is opened,
+	// after this is made.
+	ibLockFile& File() const;
 
-	// ⭐⭐ THE HOLDER DOES NOT SERIALISE ANYTHING — this mutex is what does, and until 2026-09-08 it
-	// was declared and never taken ("kept for future use", under a comment claiming the holder's
-	// discipline was enough). It is not: a holder OWNS one connection, and two threads asking that
-	// holder both get it. The lock table is reached from at least two of them — the UI thread
-	// releasing a lock when a form closes, and the session watchdog sweeping orphans on its timer —
-	// so a driver cursor was being read by one while the other ran a DELETE down the same handle.
-	//
-	// Measured 2026-09-08, on Max's own screen, and the journal shows the pair to the millisecond:
-	//     19:23:22.329  t28172  DELETE FROM sys_lock WHERE (lockGuid IN (?))   ← a form was closed
-	//     19:23:22.938  t26940  SELECT sessionGuid FROM sys_lock               ← the sweeper, meanwhile
-	//     19:23:32.342  t26940  Error retrieving Next record                   ← ten seconds later
-	// then `invalid request handle` and a dump. The same shape, on other days, arrives as `invalid
-	// transaction handle`: one connection, two drivers of it.
-	//
-	// ⚠ RECURSIVE, because SweepOrphans calls OnSessionEnd per orphan and both touch the database —
-	// a plain mutex would deadlock the sweep against itself on the first orphan it found.
+	// Records that the owner of slot `waiter` waits for the owner of `holder`, in the file, and answers whether the
+	// holder, down the chain, waits for the waiter — a deadlock, refused at once, whichever processes the chain passes.
+	bool WaitsForItself(int waiter, int holder);
+
+	// What this process stops holding: the rows by their guids, an owner's every row — its slot let go with the last.
+	void Forget(const std::set<ibString>& lockGuids);
+	void ForgetOwner(const ibString& owner);
+
+	ibApplicationInstance* const m_applicationInstance;   // whose base's locks these are
+
+	mutable std::unique_ptr<ibLockFile> m_file;
+
+	// Every call takes it: the file is read, checked and written under it (for microseconds — the waiting is done
+	// outside it). RECURSIVE, because SweepOrphans and OnSessionEnd share what they forget.
 	mutable std::recursive_mutex m_mtx;
+
+	// ⭐ WHAT THIS PROCESS HOLDS — a row's owner and table by its guid, an owner's slot and number of rows: a release finds
+	// its rows' regions without reading every one, and an owner's slot goes with its last row (under m_mtx).
+	std::map<ibString, std::pair<ibString, ibString>> m_rows;     // lockGuid → (owner, namespace)
+	std::map<ibString, std::pair<int, std::size_t>>   m_owners;   // owner → (slot, rows)
+
+	// The releases this process made (under m_mtx), and the wait that sleeps until their count moves: a lock let go
+	// here wakes the owners waiting for it at once; one let go by another process wakes them by its slot's byte
+	// (ibLockFile::WaitForRelease). Counted, so a release between a refused attempt and the sleep is not slept through.
+	std::uint64_t                m_releaseCount = 0;
+	std::condition_variable_any  m_releaseWake;
 };
 
 #endif // _IB_LOCK_MANAGER_H_

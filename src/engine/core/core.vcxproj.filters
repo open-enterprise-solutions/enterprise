@@ -182,6 +182,7 @@
     <ClCompile Include="dynamicLibrary.cpp" />
     <ClCompile Include="fileConfig.cpp" />
     <ClCompile Include="fileSystem.cpp" />
+    <ClCompile Include="sharedFile.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="inputMask.cpp" />
@@ -476,10 +477,12 @@
       <Filter>graphics</Filter>
     </ClInclude>
     <ClInclude Include="guid.h" />
+    <ClInclude Include="hash.h" />
     <ClInclude Include="fileKind.h" />
     <ClInclude Include="dynamicLibrary.h" />
     <ClInclude Include="fileConfig.h" />
     <ClInclude Include="fileSystem.h" />
+    <ClInclude Include="sharedFile.h" />
     <ClInclude Include="job\jobSchedule.h">
       <Filter>job</Filter>
     </ClInclude>

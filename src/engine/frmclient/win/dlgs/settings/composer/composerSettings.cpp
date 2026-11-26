@@ -5575,6 +5575,7 @@ void ibComposerSettingsPanel::OnBuildQuery(wxCommandEvent&)
 	// EXCLUDING TOTALS: a composition folds through its RESOURCES and its levels are its GROUPINGS,
 	// so a TOTALS clause in this text would be the same setting written where no window can show it.
 	// …AND ROLES, for the same reason: what a field is in a balance is said on the Fields page.
+	// A LOCK stays: the report holds it until it is built (record-locks.md, stage 10).
 	if (!ibShowQueryConstructor(this, text, GetEditedMetaData(), /*readOnly*/false,
 			ibQueryExclude_Totals | ibQueryExclude_Roles))
 		return;   // cancelled — the box keeps what the author had

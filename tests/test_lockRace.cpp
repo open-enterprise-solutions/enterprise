@@ -1,122 +1,62 @@
-// Two connections acquiring the same sys_lock key.
+// Two lock managers over one lock file (ibLockFile).
 //
-// A SELECT ... FOR UPDATE of a key that has no row locks nothing, so two
-// connections used to both insert an Exclusive row. The header row
-// (sys_lock_key) is the mutex: one transaction holds it, the other waits
-// or, with noWait, is refused at once. The header stays after release.
-// The sweep deletes it once nobody holds the key. A header whose row a
-// transaction holds, with nothing in sys_lock (an acquire before its insert,
-// a compile), is left without waiting, and the headers after it are swept.
-//
-// PostgreSQL is compiled into oes_pg_dialect_test (OES_LOCK_RACE_POSTGRES_ONLY)
-// and skips without OES_PG_USER. Firebird and SQLite are compiled into
-// oes_tests. Firebird skips when the client cannot create a file database.
-// SQLite runs the protocol and the guid fix on a file database. It does not
-// run noWait or the raced rounds: the driver ignores noWait, and a busy
-// file is a timeout, so five immediate retries can give up before the peer
-// commits.
+// A base's locks are held in its lock file, which every process of the base opens: two managers over one file are two
+// processes as the file sees them — each its own handle, its own slots, its own bytes. What one holds the other is
+// refused, or waits for; a slot whose owner went without letting go is swept by the next to read it; a wait that comes
+// back to the waiter is a deadlock, refused at once.
 
 #include <gtest/gtest.h>
 
 #include <atomic>
 #include <chrono>
-#include <cstdlib>
+#include <filesystem>
+#include <map>
 #include <memory>
+#include <set>
 #include <thread>
-
-#include <wx/filefn.h>
-#include <wx/filename.h>
-#include <wx/init.h>
-#include <wx/stdpaths.h>
 
 #include "backend/appData.h"
 #include "backend/appHost.h"
 #include "backend/backend_exception.h"
-#include "backend/databaseLayer/connectionPool.h"
-#include "backend/databaseLayer/databaseLayer.h"
-#include "backend/databaseLayer/databaseLayerException.h"
-#include "backend/databaseLayer/databaseQueryBuilder.h"
-#include "backend/databaseLayer/preparedStatement.h"
+#include "backend/lock/lockFile.h"
 #include "backend/lock/lockHolder.h"
+#include "backend/lock/lockKeyHash.h"
 #include "backend/lock/lockManager.h"
-
-#ifdef OES_LOCK_RACE_POSTGRES_ONLY
-#include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
-#else
-#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#ifdef OES_USE_FIREBIRD
-#include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
-#endif
-#endif
-
-struct LockSchemaAccess {
-	static void Create() { ibApplicationInstance::CreateTableLock(); }
-};
+#include "core/fileSystem.h"
 
 namespace {
 
-ibString EnvOr(const char* name, const ibString& fallback)
-{
-	const char* value = std::getenv(name);
-	return (value != nullptr && *value != '\0') ? ibString::FromUTF8(value) : fallback;
-}
-
-bool EnsureWx()
-{
-	static wxInitializer wx;
-	return wx.IsOk();
-}
-
+// A table of its own for every key, so no test meets another's rows.
 ibLockItem Item(const ibString& key, ibLockMode mode)
 {
-	return ibLockItem::ForRef(wxT("LockRace.Key"), ibGuid(key), mode);
+	ibLockItem item;
+	item.namespaceName = ibString(ibT("LockRace.")) + key;
+	item.keyFields.push_back({ ibT("Key"), ibValue(key) });
+	item.lockMode = mode;
+	return item;
 }
 
-int CountRows(const ibString& table, const ibString& ns, const ibString& hash)
+// A key of the stock table, as a LOCK writes one.
+ibLockItem StockKey(std::vector<std::pair<ibString, ibValue>> fields, ibLockMode mode)
 {
-	ibDatabaseQueryBuilder q;
-	// A real column, not a constant: Firebird refuses a parameter whose type
-	// it cannot see ("Data type unknown" on SELECT ?).
-	ibQueryIR ir(ibProject(
-		ibFilter(ibScan(table),
-			ibBinOp(ibQueryBinOp::And,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(ns))),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(hash))))),
-		{ { ibCol(wxT("namespace")), wxT("n") } }));
-	ibQueryResult rs = q.ExecuteIR(ir);
-	int n = 0;
-	while (rs.Next())
-		++n;
-	return n;
+	ibLockItem item;
+	item.namespaceName = ibT("LockRace.Stock");
+	item.keyFields = std::move(fields);
+	item.lockMode = mode;
+	return item;
 }
 
-struct HolderRow {
-	int      count = 0;
-	ibString guid;
-	int      mode  = -1;
-};
-
-HolderRow ReadHolder(const ibString& ns, const ibString& hash)
+// The rows of one key, as the file holds them.
+std::vector<ibLockSnapshotRow> RowsOf(ibLockManager* manager, const ibLockItem& item)
 {
-	ibDatabaseQueryBuilder q;
-	ibQueryIR ir(ibProject(
-		ibFilter(ibScan(lock_table),
-			ibBinOp(ibQueryBinOp::And,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("namespace")), ibConst(ibValue(ns))),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("keyHash")),   ibConst(ibValue(hash))))),
-		{ { ibCol(wxT("lockGuid")), wxEmptyString },
-		  { ibCol(wxT("lockMode")), wxEmptyString } }));
-	ibQueryResult rs = q.ExecuteIR(ir);
-	HolderRow row;
-	while (rs.Next()) {
-		++row.count;
-		row.guid = rs.GetResultString(wxT("lockGuid"));
-		row.mode = rs.GetResultInt(wxT("lockMode"));
-	}
-	return row;
+	std::vector<ibLockSnapshotRow> rows;
+	for (ibLockSnapshotRow& row : manager->GetSnapshot())
+		if (row.namespaceName.Cmp(item.namespaceName) == 0 && row.keyData.Cmp(item.KeyData()) == 0)
+			rows.push_back(std::move(row));
+	return rows;
 }
 
-enum class OutcomeKind { Granted, Conflict, Other };
+enum class OutcomeKind { Granted, Conflict, Deadlock, Other };
 
 struct Outcome {
 	OutcomeKind  kind = OutcomeKind::Other;
@@ -124,8 +64,7 @@ struct Outcome {
 	ibLockHandle handle;
 };
 
-// The worker has no session. Binding the application is what lets Acquire
-// borrow a connection, and what lets the handle release on this thread.
+// The worker has no session: the holder is given, and the bound base is what lets the handle release on this thread.
 Outcome TryAcquire(ibApplicationInstance* app, ibLockManager* manager, ibLockHolder* holder,
                    const ibLockItem& item, const ibLockOptions& opts)
 {
@@ -136,8 +75,8 @@ Outcome TryAcquire(ibApplicationInstance* app, ibLockManager* manager, ibLockHol
 		out.kind = OutcomeKind::Granted;
 	}
 	catch (const ibBackendLockException& err) {
-		out.kind = OutcomeKind::Conflict;
-		out.error = err.GetErrorDescription();   // what the conflict tells the person refused
+		out.kind = err.GetKind() == ibBackendLockException::Kind::Deadlock ? OutcomeKind::Deadlock : OutcomeKind::Conflict;
+		out.error = err.GetErrorDescription();   // what the refusal tells the person refused
 	}
 	catch (const ibCoreException& err) {
 		out.kind = OutcomeKind::Other;
@@ -145,36 +84,34 @@ Outcome TryAcquire(ibApplicationInstance* app, ibLockManager* manager, ibLockHol
 	}
 	catch (...) {
 		out.kind = OutcomeKind::Other;
-		out.error = wxT("acquire failed");
+		out.error = ibT("acquire failed");
 	}
 	return out;
 }
 
-// Both calls run together. Separate managers: one manager's mutex would
-// hide the race the header exists to close.
 struct PairResult {
 	Outcome first;
 	Outcome second;
 };
 
+// Both calls run together, each on its own manager: one manager's mutex would hide the race the file has to close.
 PairResult Race(ibApplicationInstance* app,
-                ibLockManager* a, ibLockHolder* holderA, const ibLockItem& itemA, const ibLockOptions& optsA,
-                ibLockManager* b, ibLockHolder* holderB, const ibLockItem& itemB, const ibLockOptions& optsB)
+                ibLockManager* a, ibLockHolder* holderA, const ibLockItem& itemA,
+                ibLockManager* b, ibLockHolder* holderB, const ibLockItem& itemB)
 {
 	std::atomic<int> arrived{ 0 };
 	std::atomic<bool> go{ false };
 	PairResult result;
 
-	auto run = [&](ibLockManager* manager, ibLockHolder* holder, const ibLockItem& item,
-	               const ibLockOptions& opts, Outcome* slot) {
+	auto run = [&](ibLockManager* manager, ibLockHolder* holder, const ibLockItem& item, Outcome* slot) {
 		arrived.fetch_add(1);
 		while (!go.load())
 			std::this_thread::yield();
-		*slot = TryAcquire(app, manager, holder, item, opts);
+		*slot = TryAcquire(app, manager, holder, item, {});
 	};
 
-	std::thread ta(run, a, holderA, itemA, optsA, &result.first);
-	std::thread tb(run, b, holderB, itemB, optsB, &result.second);
+	std::thread ta(run, a, holderA, itemA, &result.first);
+	std::thread tb(run, b, holderB, itemB, &result.second);
 	while (arrived.load() < 2)
 		std::this_thread::yield();
 	go.store(true);
@@ -183,40 +120,21 @@ PairResult Race(ibApplicationInstance* app,
 	return result;
 }
 
-// One static set per driver. The suites run in one process and must not
-// share the application or the database.
-template <typename Driver>
+// One base with no folder: its lock file is this process's own (ResolveLockFile), the second manager opens the same.
 class LockRace : public ::testing::Test {
 protected:
-	using DriverType = Driver;
-
 	static ibApplicationInstance* s_app;
-	static std::shared_ptr<ibDatabaseLayer> s_db;
 	static std::unique_ptr<ibLockManager> s_peer;
+	static ibString s_path;
 
 	static void SetUpTestSuite()
 	{
-		if (!EnsureWx())
-			return;
-		try {
-			if (!Driver::Open(s_db))
-				return;
-		}
-		catch (...) {
-			return;   // no client, or the file database would not come up — the test skips
-		}
 		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			return;
 		s_app = ibApplicationInstance::Get();
-		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
-		if (s_app == nullptr || pool == nullptr) {
-			if (ibApplicationInstance::Get() != nullptr)
-				ibApplicationInstance::DestroyAppDataEnv();
-			s_app = nullptr;
+		if (s_app == nullptr)
 			return;
-		}
-		pool->Init(s_db, /*maxSize=*/4, /*minIdle=*/0);
-		LockSchemaAccess::Create();
+		s_path = s_app->ResolveLockFile();
 		s_peer = std::make_unique<ibLockManager>(ib::AppDataCtorToken{ s_app });
 	}
 
@@ -226,546 +144,401 @@ protected:
 		if (s_app != nullptr && ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
 		s_app = nullptr;
-		if (s_db) {
-			s_db->Close();
-			s_db.reset();
-		}
-		Driver::Close();
+		std::error_code error;
+		if (!s_path.IsEmpty())
+			std::filesystem::remove(ibPathOf(s_path), error);
+		s_path.clear();
 	}
 
 	void SetUp() override
 	{
-		if (s_app == nullptr || s_peer == nullptr)
-			GTEST_SKIP() << "lock database did not come up";
+		ASSERT_TRUE(s_app != nullptr);
+		ASSERT_TRUE(s_peer != nullptr);
 	}
 
 	ibApplicationInstance* App() const { return s_app; }
-	ibLockManager* Mine() const { return ibApplicationInstance::GetLockManager(); }
+	ibLockManager* Mine() const { return ibApplicationInstance::GetLockManager(s_app); }
 	ibLockManager* Peer() const { return s_peer.get(); }
+};
 
-	void ExpectOneExclusive(int round)
+ibApplicationInstance* LockRace::s_app = nullptr;
+std::unique_ptr<ibLockManager> LockRace::s_peer;
+ibString LockRace::s_path;
+
+TEST_F(LockRace, Acquire_SecondShared_Granted)
+{
+	const ibLockItem shared = Item(ibT("shared-1"), ibLockMode::Shared);
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	const Outcome first = TryAcquire(App(), Mine(), &left, shared, {});
+	const Outcome second = TryAcquire(App(), Peer(), &right, shared, {});
+	ASSERT_EQ(first.kind, OutcomeKind::Granted) << first.error;
+	ASSERT_EQ(second.kind, OutcomeKind::Granted) << second.error;
+	EXPECT_EQ(RowsOf(Mine(), shared).size(), 2u);
+}
+
+TEST_F(LockRace, Acquire_ExclusiveWhileSharedHeld_Refused)
+{
+	const ibLockItem shared = Item(ibT("shared-2"), ibLockMode::Shared);
+	ibLockItem exclusive = shared;
+	exclusive.lockMode = ibLockMode::Exclusive;
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	const Outcome held = TryAcquire(App(), Mine(), &left, shared, {});
+	ASSERT_EQ(held.kind, OutcomeKind::Granted) << held.error;
+	const Outcome blocked = TryAcquire(App(), Peer(), &right, exclusive, {});
+	EXPECT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
+	EXPECT_EQ(RowsOf(Peer(), shared).size(), 1u);
+}
+
+// ⭐ A CONFLICT NAMES WHAT IS LOCKED, WHO HOLDS IT AND SINCE WHEN (2026-11-19). It said "<namespace> is locked by
+// another session": a metaobject's guid, and no holder a person could find. Read across the file: the holder is the
+// other manager's, named by its slot.
+TEST_F(LockRace, Acquire_Conflict_NamesTheObjectTheHolderAndSince)
+{
+	ibLockItem item = Item(ibT("named"), ibLockMode::Exclusive);
+	item.objectName = ibT("Goods receipt");
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	const Outcome held = TryAcquire(App(), Mine(), &left, item, {});
+	ASSERT_EQ(held.kind, OutcomeKind::Granted) << held.error;
+	const Outcome blocked = TryAcquire(App(), Peer(), &right, item, {});
+	ASSERT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
+	EXPECT_TRUE(blocked.error.Contains(ibT("Goods receipt is locked by left since "))) << blocked.error;
+}
+
+TEST_F(LockRace, Acquire_UpgradeOfOwnShared_KeepsGuid)
+{
+	const ibLockItem shared = Item(ibT("upgrade"), ibLockMode::Shared);
+	ibLockItem exclusive = shared;
+	exclusive.lockMode = ibLockMode::Exclusive;
+	ibSingleLockHolder left(ibT("left"));
+	Outcome held = TryAcquire(App(), Mine(), &left, shared, {});
+	ASSERT_EQ(held.kind, OutcomeKind::Granted) << held.error;
+	const ibGuid guid = held.handle.LockGuids().front();
+	const Outcome upgrade = TryAcquire(App(), Mine(), &left, exclusive, {});
+	EXPECT_EQ(upgrade.kind, OutcomeKind::Granted) << upgrade.error;
+	const std::vector<ibLockSnapshotRow> rows = RowsOf(Peer(), shared);
+	ASSERT_EQ(rows.size(), 1u);
+	EXPECT_TRUE(rows.front().lockGuid == guid);
+	EXPECT_EQ(rows.front().lockMode, ibLockMode::Exclusive);
 	{
-		const ibLockItem item = Item(
-			ibString::Format(wxT("eeeeeeee-eeee-eeee-eeee-%012d"), round), ibLockMode::Exclusive);
-		ibSingleLockHolder left(wxT("left"));
-		ibSingleLockHolder right(wxT("right"));
-		const PairResult race = Race(App(), Mine(), &left, item, {}, Peer(), &right, item, {});
+		ibApplicationInstanceScope bound(App());
+		held.handle.Release();
+	}
+	EXPECT_TRUE(RowsOf(Peer(), shared).empty());
+}
+
+// Two managers asking for one key at once: one gets it, the other is refused — every round.
+TEST_F(LockRace, Acquire_TogetherOnTwoManagers_OneExclusive)
+{
+	for (int round = 0; round < 20; ++round) {
+		const ibLockItem item = Item(ibString::Format(ibT("race-%d"), round), ibLockMode::Exclusive);
+		ibSingleLockHolder left(ibT("left"));
+		ibSingleLockHolder right(ibT("right"));
+		const PairResult race = Race(App(), Mine(), &left, item, Peer(), &right, item);
 		const int granted = (race.first.kind == OutcomeKind::Granted ? 1 : 0)
 			+ (race.second.kind == OutcomeKind::Granted ? 1 : 0);
 		EXPECT_EQ(granted, 1) << race.first.error << " / " << race.second.error;
 		EXPECT_TRUE(race.first.kind == OutcomeKind::Conflict || race.second.kind == OutcomeKind::Conflict)
 			<< race.first.error << " / " << race.second.error;
 	}
-
-	bool SeedHeader(const ibLockItem& item)
-	{
-		ibSingleLockHolder seed(wxT("seed"));
-		ibLockHandle held = Mine()->Acquire({ item }, {}, &seed);
-		if (!held.IsValid())
-			return false;
-		held.Release();
-		return CountRows(lock_key_table, item.namespaceName, item.KeyHash()) == 1
-			&& CountRows(lock_table, item.namespaceName, item.KeyHash()) == 0;
-	}
-
-	// The header already exists and is committed. This transaction locks it
-	// and inserts a holder the waiter must not see until Commit.
-	void GiveUp(ibDatabaseLayer* raw)
-	{
-		if (raw == nullptr || !raw->IsActiveTransaction())
-			return;
-		try { raw->RollBack(); }
-		catch (...) {}
-	}
-
-	bool Plant(ibDatabaseLayer* raw, const ibLockItem& item, ibLockMode mode)
-	{
-		try {
-			raw->BeginTransaction();
-			{
-				ibStatementGuard upd(raw, raw->PrepareStatement(
-					wxT("UPDATE sys_lock_key SET namespace = ? WHERE namespace = ? AND keyHash = ?")));
-				if (!upd) {
-					GiveUp(raw);
-					return false;
-				}
-				upd->SetParamString(1, item.namespaceName);
-				upd->SetParamString(2, item.namespaceName);
-				upd->SetParamString(3, item.KeyHash());
-				if (upd->RunQuery() < 1) {
-					GiveUp(raw);
-					return false;
-				}
-			}
-			{
-				ibStatementGuard ins(raw, raw->PrepareStatement(
-					wxT("INSERT INTO sys_lock (lockGuid, sessionGuid, namespace, keyHash, keyData, lockMode, acquiredAt, userName, computer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")));
-				if (!ins) {
-					GiveUp(raw);
-					return false;
-				}
-				const ibGuid owner = ibNewUniqueGuid;
-				ins->SetParamString(1, owner.str());
-				ins->SetParamString(2, owner.str());
-				ins->SetParamString(3, item.namespaceName);
-				ins->SetParamString(4, item.KeyHash());
-				ins->SetParamString(5, item.KeyData());
-				ins->SetParamInt(6, static_cast<int>(mode));
-				ins->SetParamDate(7, ibDateTime::Now());
-				ins->SetParamString(8, wxT("peer"));
-				ins->SetParamString(9, wxT("test"));
-				if (ins->RunQuery() < 1) {
-					GiveUp(raw);
-					return false;
-				}
-			}
-			return true;
-		}
-		catch (const ibCoreException&) {
-			GiveUp(raw);
-			return false;
-		}
-	}
-
-	Outcome WaitUntilCommit(ibDatabaseLayer* raw, const ibLockItem& item)
-	{
-		ibSingleLockHolder left(wxT("left"));
-		ibLockManager* mine = Mine();
-		std::atomic<bool> finished{ false };
-		Outcome outcome;
-		std::thread waiter([&] {
-			outcome = TryAcquire(App(), mine, &left, item, {});
-			finished.store(true);
-		});
-
-		const auto blockedUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(400);
-		while (!finished.load() && std::chrono::steady_clock::now() < blockedUntil)
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
-		EXPECT_FALSE(finished.load()) << "the acquire did not wait for the header";
-
-		bool committed = false;
-		try {
-			raw->Commit();
-			committed = true;
-		}
-		catch (...) {}
-		if (!committed) {
-			try { raw->RollBack(); }
-			catch (...) {}
-		}
-
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
-		while (!finished.load() && std::chrono::steady_clock::now() < deadline)
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
-		if (!finished.load()) {
-			try { raw->RollBack(); }
-			catch (...) {}
-			waiter.join();
-			ADD_FAILURE() << "the acquire was still waiting after the header was released";
-			return outcome;
-		}
-		waiter.join();
-		return outcome;
-	}
-};
-
-template <typename Driver>
-ibApplicationInstance* LockRace<Driver>::s_app = nullptr;
-
-template <typename Driver>
-std::shared_ptr<ibDatabaseLayer> LockRace<Driver>::s_db;
-
-template <typename Driver>
-std::unique_ptr<ibLockManager> LockRace<Driver>::s_peer;
-
-#define OES_LOCK_SERVER_TESTS(Fixture)                                                                \
-	TEST_F(Fixture, Acquire_RacedExclusive_GrantsOneOfTwenty)                                          \
-	{                                                                                                  \
-		for (int round = 0; round < 20; ++round)                                                       \
-			ExpectOneExclusive(round);                                                                 \
-	}                                                                                                  \
-	TEST_F(Fixture, Acquire_ExclusiveRacedWithShared_GrantsOne)                                        \
-	{                                                                                                  \
-		const ibLockItem exclusive = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"), ibLockMode::Exclusive); \
-		const ibLockItem shared    = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"), ibLockMode::Shared);    \
-		ibSingleLockHolder left(wxT("left"));                                                          \
-		ibSingleLockHolder right(wxT("right"));                                                        \
-		const PairResult race = Race(App(), Mine(), &left, exclusive, {}, Peer(), &right, shared, {}); \
-		const int granted = (race.first.kind == OutcomeKind::Granted ? 1 : 0)                          \
-			+ (race.second.kind == OutcomeKind::Granted ? 1 : 0);                                      \
-		EXPECT_EQ(granted, 1) << race.first.error << " / " << race.second.error;                       \
-	}                                                                                                  \
-	TEST_F(Fixture, Acquire_TwoSharedRaced_GrantsBoth)                                                 \
-	{                                                                                                  \
-		const ibLockItem shared = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2"), ibLockMode::Shared); \
-		ibSingleLockHolder left(wxT("left"));                                                          \
-		ibSingleLockHolder right(wxT("right"));                                                        \
-		const PairResult race = Race(App(), Mine(), &left, shared, {}, Peer(), &right, shared, {});    \
-		EXPECT_EQ(race.first.kind, OutcomeKind::Granted) << race.first.error;                          \
-		EXPECT_EQ(race.second.kind, OutcomeKind::Granted) << race.second.error;                        \
-		EXPECT_EQ(CountRows(lock_table, shared.namespaceName, shared.KeyHash()), 2);                   \
-	}                                                                                                  \
-	TEST_F(Fixture, Acquire_UpgradeWhilePeerHoldsShared_Refused)                                       \
-	{                                                                                                  \
-		const ibLockItem shared = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3"), ibLockMode::Shared); \
-		ibLockItem exclusive = shared;                                                                 \
-		exclusive.lockMode = ibLockMode::Exclusive;                                                    \
-		ibSingleLockHolder left(wxT("left"));                                                          \
-		ibSingleLockHolder right(wxT("right"));                                                        \
-		ibLockHandle held = Mine()->Acquire({ shared }, {}, &left);                                    \
-		ibLockHandle other = Peer()->Acquire({ shared }, {}, &right);                                  \
-		ASSERT_TRUE(held.IsValid());                                                                   \
-		ASSERT_TRUE(other.IsValid());                                                                  \
-		const Outcome upgrade = TryAcquire(App(), Mine(), &left, exclusive, {});                       \
-		EXPECT_EQ(upgrade.kind, OutcomeKind::Conflict) << upgrade.error;                               \
-		EXPECT_EQ(CountRows(lock_table, shared.namespaceName, shared.KeyHash()), 2);                   \
-	}                                                                                                  \
-	TEST_F(Fixture, Acquire_UpgradeOfOwnShared_KeepsGuid)                                              \
-	{                                                                                                  \
-		const ibLockItem shared = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4"), ibLockMode::Shared); \
-		ibLockItem exclusive = shared;                                                                 \
-		exclusive.lockMode = ibLockMode::Exclusive;                                                    \
-		ibSingleLockHolder left(wxT("left"));                                                          \
-		ibSingleLockHolder right(wxT("right"));                                                        \
-		ibLockHandle held = Mine()->Acquire({ shared }, {}, &left);                                    \
-		ASSERT_TRUE(held.IsValid());                                                                   \
-		const ibString guid = held.LockGuids().front().str();                                          \
-		const Outcome upgrade = TryAcquire(App(), Mine(), &left, exclusive, {});                       \
-		EXPECT_EQ(upgrade.kind, OutcomeKind::Granted) << upgrade.error;                                \
-		const HolderRow row = ReadHolder(shared.namespaceName, shared.KeyHash());                      \
-		EXPECT_EQ(row.count, 1);                                                                       \
-		EXPECT_EQ(row.guid, guid);                                                                     \
-		EXPECT_EQ(row.mode, static_cast<int>(ibLockMode::Exclusive));                                  \
-		const Outcome blocked = TryAcquire(App(), Peer(), &right, shared, {});                         \
-		EXPECT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;                               \
-		held.Release();                                                                                \
-		EXPECT_EQ(CountRows(lock_table, shared.namespaceName, shared.KeyHash()), 0);                   \
-		EXPECT_EQ(CountRows(lock_key_table, shared.namespaceName, shared.KeyHash()), 1);               \
-	}                                                                                                  \
-	TEST_F(Fixture, Acquire_NoWaitOnHeldHeader_LockException)                                          \
-	{                                                                                                  \
-		const ibLockItem exclusive = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5"), ibLockMode::Exclusive); \
-		ASSERT_TRUE(SeedHeader(exclusive));                                                            \
-		auto raw = DriverType::Hold();                                                                     \
-		ASSERT_TRUE(raw != nullptr);                                                                   \
-		raw->BeginTransaction();                                                                       \
-		{                                                                                              \
-			ibStatementGuard upd(raw.get(), raw->PrepareStatement(                                     \
-				wxT("UPDATE sys_lock_key SET namespace = ? WHERE namespace = ? AND keyHash = ?")));    \
-			ASSERT_TRUE(static_cast<bool>(upd));                                                       \
-			upd->SetParamString(1, exclusive.namespaceName);                                           \
-			upd->SetParamString(2, exclusive.namespaceName);                                           \
-			upd->SetParamString(3, exclusive.KeyHash());                                               \
-			ASSERT_GE(upd->RunQuery(), 1);                                                             \
-		}                                                                                              \
-		ibSingleLockHolder left(wxT("left"));                                                          \
-		ibLockOptions nowait;                                                                          \
-		nowait.wait = false;                                                                           \
-		ibLockManager* mine = Mine();                                                                  \
-		const auto began = std::chrono::steady_clock::now();                                           \
-		std::atomic<bool> finished{ false };                                                           \
-		Outcome outcome;                                                                               \
-		std::thread waiter([&] {                                                                       \
-			outcome = TryAcquire(App(), mine, &left, exclusive, nowait);                               \
-			finished.store(true);                                                                      \
-		});                                                                                            \
-		const auto deadline = began + std::chrono::milliseconds(1500);                                 \
-		while (!finished.load() && std::chrono::steady_clock::now() < deadline)                        \
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));                                \
-		if (!finished.load()) {                                                                        \
-			try { raw->RollBack(); }                                                                   \
-			catch (...) {}                                                                             \
-			waiter.join();                                                                             \
-			FAIL() << "noWait was still waiting after 1500ms";                                         \
-		}                                                                                              \
-		waiter.join();                                                                                 \
-		const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(                     \
-			std::chrono::steady_clock::now() - began);                                                 \
-		try { raw->RollBack(); }                                                                       \
-		catch (...) {}                                                                                 \
-		EXPECT_LT(waited.count(), 1000);                                                               \
-		EXPECT_EQ(outcome.kind, OutcomeKind::Conflict) << outcome.error;                               \
-	}                                                                                                  \
-	TEST_F(Fixture, Acquire_BlockedExclusiveThenCommit_Conflict)                                       \
-	{                                                                                                  \
-		const ibLockItem exclusive = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa6"), ibLockMode::Exclusive); \
-		ASSERT_TRUE(SeedHeader(exclusive));                                                            \
-		auto raw = DriverType::Hold();                                                                     \
-		ASSERT_TRUE(raw != nullptr);                                                                   \
-		ASSERT_TRUE(Plant(raw.get(), exclusive, ibLockMode::Exclusive)) << "the peer did not hold the header"; \
-		const Outcome outcome = WaitUntilCommit(raw.get(), exclusive);                                 \
-		EXPECT_EQ(outcome.kind, OutcomeKind::Conflict) << outcome.error;                               \
-		if (raw->IsActiveTransaction())                                                                \
-			raw->RollBack();                                                                           \
-	}                                                                                                  \
-	TEST_F(Fixture, Acquire_BlockedSharedThenCommit_Granted)                                           \
-	{                                                                                                  \
-		const ibLockItem shared = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa7"), ibLockMode::Shared); \
-		ASSERT_TRUE(SeedHeader(shared));                                                               \
-		auto raw = DriverType::Hold();                                                                     \
-		ASSERT_TRUE(raw != nullptr);                                                                   \
-		ASSERT_TRUE(Plant(raw.get(), shared, ibLockMode::Shared)) << "the peer did not hold the header"; \
-		const Outcome outcome = WaitUntilCommit(raw.get(), shared);                                    \
-		EXPECT_EQ(outcome.kind, OutcomeKind::Granted) << outcome.error;                                \
-		if (raw->IsActiveTransaction())                                                                \
-			raw->RollBack();                                                                           \
-	}                                                                                                  \
-	TEST_F(Fixture, SweepOrphans_HeaderHeldByRow_KeptAndOthersSwept)                                   \
-	{                                                                                                  \
-		const ibLockItem held = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa8"), ibLockMode::Exclusive); \
-		const ibLockItem idle = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa9"), ibLockMode::Exclusive); \
-		ASSERT_TRUE(SeedHeader(held));                                                                 \
-		ASSERT_TRUE(SeedHeader(idle));                                                                 \
-		auto raw = DriverType::Hold();                                                                 \
-		ASSERT_TRUE(raw != nullptr);                                                                   \
-		raw->BeginTransaction();                                                                       \
-		{                                                                                              \
-			ibStatementGuard upd(raw.get(), raw->PrepareStatement(                                     \
-				wxT("UPDATE sys_lock_key SET namespace = ? WHERE namespace = ? AND keyHash = ?")));    \
-			ASSERT_TRUE(static_cast<bool>(upd));                                                       \
-			upd->SetParamString(1, held.namespaceName);                                                \
-			upd->SetParamString(2, held.namespaceName);                                                \
-			upd->SetParamString(3, held.KeyHash());                                                    \
-			ASSERT_GE(upd->RunQuery(), 1);                                                             \
-		}                                                                                              \
-		ibLockManager* mine = Mine();                                                                  \
-		const auto began = std::chrono::steady_clock::now();                                           \
-		std::atomic<bool> finished{ false };                                                           \
-		std::thread sweeper([&] {                                                                      \
-			ibApplicationInstanceScope bound(App());                                                   \
-			mine->SweepOrphans({});                                                                    \
-			finished.store(true);                                                                      \
-		});                                                                                            \
-		const auto deadline = began + std::chrono::milliseconds(3000);                                 \
-		while (!finished.load() && std::chrono::steady_clock::now() < deadline)                        \
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));                                \
-		const bool waited = !finished.load();                                                          \
-		try { raw->RollBack(); }                                                                       \
-		catch (...) {}                                                                                 \
-		sweeper.join();                                                                                \
-		EXPECT_FALSE(waited) << "the sweep waited for a header a transaction holds by its row";        \
-		EXPECT_EQ(CountRows(lock_key_table, held.namespaceName, held.KeyHash()), 1) << "a held header is left"; \
-		EXPECT_EQ(CountRows(lock_key_table, idle.namespaceName, idle.KeyHash()), 0) << "the others are swept";  \
-	}
-
-#ifdef OES_LOCK_RACE_POSTGRES_ONLY
-
-struct PostgresDriver {
-	static bool Open(std::shared_ptr<ibDatabaseLayer>& db)
-	{
-		if (std::getenv("OES_PG_USER") == nullptr)
-			return false;
-		auto layer = std::make_shared<ibDatabaseLayerPostgres>();
-		if (!layer->Open(
-				EnvOr("OES_PG_HOST", wxT("127.0.0.1")),
-				EnvOr("OES_PG_PORT", wxT("5432")),
-				EnvOr("OES_PG_DB", wxT("oes_test")),
-				EnvOr("OES_PG_USER", wxT("postgres")),
-				EnvOr("OES_PG_PASSWORD", wxEmptyString)))
-			return false;
-		db = layer;
-		return true;
-	}
-
-	static std::shared_ptr<ibDatabaseLayer> Hold()
-	{
-		auto raw = std::make_shared<ibDatabaseLayerPostgres>();
-		if (!raw->Open(
-				EnvOr("OES_PG_HOST", wxT("127.0.0.1")),
-				EnvOr("OES_PG_PORT", wxT("5432")),
-				EnvOr("OES_PG_DB", wxT("oes_test")),
-				EnvOr("OES_PG_USER", wxT("postgres")),
-				EnvOr("OES_PG_PASSWORD", wxEmptyString)))
-			return nullptr;
-		return raw;
-	}
-
-	static void Close() {}
-};
-
-class PostgresLockRace : public LockRace<PostgresDriver> {};
-
-OES_LOCK_SERVER_TESTS(PostgresLockRace)
-
-#else
-
-#ifdef OES_USE_FIREBIRD
-
-struct FirebirdDriver {
-	static ibString s_path;
-
-	static bool Open(std::shared_ptr<ibDatabaseLayer>& db)
-	{
-		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-		s_path = wxFileName(wxStandardPaths::Get().GetTempDir(),
-			ibString::Format(wxT("oes_lock_race_%lld.fdb"), (long long)now)).GetFullPath();
-		std::shared_ptr<ibDatabaseLayerFirebird> layer;
-		try {
-			layer = std::make_shared<ibDatabaseLayerFirebird>();
-			layer->SetUser(wxT("SYSDBA"));
-			layer->SetPassword(wxT("masterkey"));
-			if (!layer->Open(s_path))
-				return false;
-		}
-		catch (...) {
-			return false;
-		}
-		db = layer;
-		return true;
-	}
-
-	static std::shared_ptr<ibDatabaseLayer> Hold()
-	{
-		try {
-			auto raw = std::make_shared<ibDatabaseLayerFirebird>();
-			raw->SetUser(wxT("SYSDBA"));
-			raw->SetPassword(wxT("masterkey"));
-			if (!raw->Open(s_path))
-				return nullptr;
-			return raw;
-		}
-		catch (...) {
-			return nullptr;
-		}
-	}
-
-	static void Close()
-	{
-		if (!s_path.IsEmpty() && wxFileExists(s_path))
-			wxRemoveFile(s_path);
-		s_path.clear();
-	}
-};
-
-ibString FirebirdDriver::s_path;
-
-class FirebirdLockRace : public LockRace<FirebirdDriver> {};
-
-OES_LOCK_SERVER_TESTS(FirebirdLockRace)
-
-#endif
-
-struct SqliteDriver {
-	static ibString s_path;
-
-	static bool Open(std::shared_ptr<ibDatabaseLayer>& db)
-	{
-		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-		s_path = wxFileName(wxStandardPaths::Get().GetTempDir(),
-			ibString::Format(wxT("oes_lock_race_%lld.db"), (long long)now)).GetFullPath();
-		auto layer = std::make_shared<ibDatabaseLayerSQLite>();
-		if (!layer->Open(s_path))
-			return false;
-		db = layer;
-		return true;
-	}
-
-	static void Close()
-	{
-		if (!s_path.IsEmpty() && wxFileExists(s_path))
-			wxRemoveFile(s_path);
-		s_path.clear();
-	}
-};
-
-ibString SqliteDriver::s_path;
-
-class SqliteLockRace : public LockRace<SqliteDriver> {
-protected:
-	void SetUp() override
-	{
-		ASSERT_TRUE(s_app != nullptr);
-		ASSERT_TRUE(s_peer != nullptr);
-	}
-};
-
-TEST_F(SqliteLockRace, Acquire_SecondShared_Granted)
-{
-	const ibLockItem shared = Item(wxT("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1"), ibLockMode::Shared);
-	ibSingleLockHolder left(wxT("left"));
-	ibSingleLockHolder right(wxT("right"));
-	ibLockHandle first = Mine()->Acquire({ shared }, {}, &left);
-	ibLockHandle second = Peer()->Acquire({ shared }, {}, &right);
-	ASSERT_TRUE(first.IsValid());
-	ASSERT_TRUE(second.IsValid());
-	EXPECT_EQ(CountRows(lock_table, shared.namespaceName, shared.KeyHash()), 2);
-	EXPECT_EQ(CountRows(lock_key_table, shared.namespaceName, shared.KeyHash()), 1);
 }
 
-TEST_F(SqliteLockRace, Acquire_ExclusiveWhileSharedHeld_Refused)
+TEST_F(LockRace, SweepOrphans_OwnerNotLive_DropsItsRows)
 {
-	const ibLockItem shared = Item(wxT("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2"), ibLockMode::Shared);
-	ibLockItem exclusive = shared;
-	exclusive.lockMode = ibLockMode::Exclusive;
-	ibSingleLockHolder left(wxT("left"));
-	ibSingleLockHolder right(wxT("right"));
-	ibLockHandle held = Mine()->Acquire({ shared }, {}, &left);
-	ASSERT_TRUE(held.IsValid());
-	const Outcome blocked = TryAcquire(App(), Peer(), &right, exclusive, {});
-	EXPECT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
-	EXPECT_EQ(CountRows(lock_table, shared.namespaceName, shared.KeyHash()), 1);
-}
-
-// ⭐ A CONFLICT NAMES WHAT IS LOCKED, WHO HOLDS IT AND SINCE WHEN (2026-11-19). It said "<namespace> is locked by
-// another session": a metaobject's guid, and no holder a person could find.
-TEST_F(SqliteLockRace, Acquire_Conflict_NamesTheObjectTheHolderAndSince)
-{
-	ibLockItem item = Item(wxT("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbc1"), ibLockMode::Exclusive);
-	item.objectName = wxT("Goods receipt");
-	ibSingleLockHolder left(wxT("left"));
-	ibSingleLockHolder right(wxT("right"));
-	ibLockHandle held = Mine()->Acquire({ item }, {}, &left);
-	ASSERT_TRUE(held.IsValid());
-	const Outcome blocked = TryAcquire(App(), Peer(), &right, item, {});
-	ASSERT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
-	EXPECT_TRUE(blocked.error.Contains(wxT("Goods receipt is open for editing by left since "))) << blocked.error;
-}
-
-TEST_F(SqliteLockRace, Acquire_UpgradeOfOwnShared_KeepsGuid)
-{
-	const ibLockItem shared = Item(wxT("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3"), ibLockMode::Shared);
-	ibLockItem exclusive = shared;
-	exclusive.lockMode = ibLockMode::Exclusive;
-	ibSingleLockHolder left(wxT("left"));
-	ibLockHandle held = Mine()->Acquire({ shared }, {}, &left);
-	ASSERT_TRUE(held.IsValid());
-	const ibString guid = held.LockGuids().front().str();
-	const Outcome upgrade = TryAcquire(App(), Mine(), &left, exclusive, {});
-	EXPECT_EQ(upgrade.kind, OutcomeKind::Granted) << upgrade.error;
-	const HolderRow row = ReadHolder(shared.namespaceName, shared.KeyHash());
-	EXPECT_EQ(row.count, 1);
-	EXPECT_EQ(row.guid, guid);
-	EXPECT_EQ(row.mode, static_cast<int>(ibLockMode::Exclusive));
-	held.Release();
-	EXPECT_EQ(CountRows(lock_table, shared.namespaceName, shared.KeyHash()), 0);
-	EXPECT_EQ(CountRows(lock_key_table, shared.namespaceName, shared.KeyHash()), 1);
-}
-
-TEST_F(SqliteLockRace, SweepOrphans_NoHolder_RemovesHeader)
-{
-	const ibLockItem item = Item(wxT("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4"), ibLockMode::Exclusive);
-	ibSingleLockHolder left(wxT("left"));
-	ibLockHandle held = Mine()->Acquire({ item }, {}, &left);
-	ASSERT_TRUE(held.IsValid());
-	EXPECT_EQ(CountRows(lock_key_table, item.namespaceName, item.KeyHash()), 1);
-	held.Release();
-	EXPECT_EQ(CountRows(lock_table, item.namespaceName, item.KeyHash()), 0);
-	EXPECT_EQ(CountRows(lock_key_table, item.namespaceName, item.KeyHash()), 1);
-	Mine()->SweepOrphans({});
-	EXPECT_EQ(CountRows(lock_key_table, item.namespaceName, item.KeyHash()), 0);
-}
-
-TEST_F(SqliteLockRace, SweepOrphans_HolderPresent_KeepsHeader)
-{
-	const ibLockItem item = Item(wxT("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb5"), ibLockMode::Exclusive);
-	ibSingleLockHolder left(wxT("left"));
-	ibLockHandle held = Mine()->Acquire({ item }, {}, &left);
-	ASSERT_TRUE(held.IsValid());
+	const ibLockItem item = Item(ibT("orphan"), ibLockMode::Exclusive);
+	ibSingleLockHolder left(ibT("left"));
+	const Outcome held = TryAcquire(App(), Mine(), &left, item, {});
+	ASSERT_EQ(held.kind, OutcomeKind::Granted) << held.error;
 	Mine()->SweepOrphans({ left.Identity() });
-	EXPECT_EQ(CountRows(lock_table, item.namespaceName, item.KeyHash()), 1);
-	EXPECT_EQ(CountRows(lock_key_table, item.namespaceName, item.KeyHash()), 1);
+	EXPECT_EQ(RowsOf(Mine(), item).size(), 1u);
+	Mine()->SweepOrphans({});
+	EXPECT_TRUE(RowsOf(Mine(), item).empty());
 }
 
-#endif
+// ⭐ AN OWNER WHOSE PROCESS WENT HOLDS NOTHING: its slot's byte went with it, and the next to read its rows drops them.
+// The file object gone without letting go is what a process that died leaves.
+TEST_F(LockRace, Acquire_OwnerOfAGoneFile_IsSwept)
+{
+	const ibLockItem item = Item(ibT("gone"), ibLockMode::Exclusive);
+	{
+		ibLockFile gone(s_path);
+		const ibGuid owner = ibNewUniqueGuid;
+		const int slot = gone.TakeSlot(owner, ibT("gone"), ibT("nowhere"));
+		gone.Change({ item.namespaceName }, [&](ibLockFile::ibBatch& batch) {
+			ibLockFile::ibRow row;
+			row.m_lockGuid  = ibNewUniqueGuid;
+			row.m_owner     = owner;
+			row.m_slot      = slot;
+			row.m_mode      = ibLockMode::Exclusive;
+			row.m_since     = ibDateTime::Now();
+			row.m_namespace = item.namespaceName;
+			row.m_keyHash   = item.KeyHash();
+			row.m_keyData   = item.KeyData();
+			batch.Add(std::move(row));
+		});
+		ibSingleLockHolder right(ibT("right"));
+		const Outcome blocked = TryAcquire(App(), Peer(), &right, item, {});
+		EXPECT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
+	}
+	ibSingleLockHolder right(ibT("right"));
+	const Outcome after = TryAcquire(App(), Peer(), &right, item, {});
+	EXPECT_EQ(after.kind, OutcomeKind::Granted) << after.error;
+	EXPECT_EQ(RowsOf(Peer(), item).size(), 1u);
+}
+
+// ⭐ TWO KEYS OF ONE TABLE MEET WHEN THEY AGREE ON EVERY FIELD BOTH NAME (2026-11-26, the query's LOCK): a field only
+// one of them names is any value to the other, and no field is the whole table.
+TEST(LockKey, Overlap_AgreeOnTheCommonFields_Meet)
+{
+	const ibString productA = ibLockKey::Canonicalize({ { ibT("Product"), ibValue(ibString(ibT("A"))) } });
+	const ibString productB = ibLockKey::Canonicalize({ { ibT("Product"), ibValue(ibString(ibT("B"))) } });
+	const ibString productAInW = ibLockKey::Canonicalize({ { ibT("Warehouse"), ibValue(ibString(ibT("W"))) },
+	                                                       { ibT("Product"),   ibValue(ibString(ibT("A"))) } });
+	const ibString inV = ibLockKey::Canonicalize({ { ibT("Warehouse"), ibValue(ibString(ibT("V"))) } });
+
+	EXPECT_TRUE(ibLockKey::Overlap(productAInW, productA));
+	EXPECT_TRUE(ibLockKey::Overlap(productA, productAInW));
+	EXPECT_FALSE(ibLockKey::Overlap(productAInW, productB));
+	EXPECT_FALSE(ibLockKey::Overlap(productAInW, inV));
+	EXPECT_TRUE(ibLockKey::Overlap(productB, inV));          // no field in common: they may name one record
+	EXPECT_TRUE(ibLockKey::Overlap(ibString(), productA));   // the whole table
+}
+
+// Keys of the same names share one signature whatever their values, the names' case aside; other names, another.
+TEST(LockKey, FieldsHash_TheNamesNotTheValues)
+{
+	const ibString productA = ibLockKey::Canonicalize({ { ibT("Product"), ibValue(ibString(ibT("A"))) } });
+	const ibString productB = ibLockKey::Canonicalize({ { ibT("Product"), ibValue(ibString(ibT("B"))) } });
+	const ibString productLower = ibLockKey::Canonicalize({ { ibT("product"), ibValue(ibString(ibT("A"))) } });
+	const ibString productInW = ibLockKey::Canonicalize({ { ibT("Product"),   ibValue(ibString(ibT("A"))) },
+	                                                      { ibT("Warehouse"), ibValue(ibString(ibT("W"))) } });
+
+	EXPECT_EQ(ibLockKey::FieldsHash(productA), ibLockKey::FieldsHash(productB));
+	EXPECT_EQ(ibLockKey::FieldsHash(productA), ibLockKey::FieldsHash(productLower));
+	EXPECT_NE(ibLockKey::FieldsHash(productA), ibLockKey::FieldsHash(productInW));
+	EXPECT_NE(ibLockKey::FieldsHash(ibString()), 0u);   // 0 stays "not known"
+}
+
+// ⭐ A FILE THAT GREW IS CUT BACK ONCE NOBODY HOLDS ANYTHING (2026-11-26: 4.3 MB, nothing held): a region grown by
+// doubling leaves its old rooms behind, and the last slot let go takes them back.
+TEST(LockFile, FreeSlot_LastOne_CutsTheFileBack)
+{
+	std::error_code error;
+	const ibString path = ibTextOf(std::filesystem::temp_directory_path(error)
+		/ ibPathOf(ibT("oes-reclaim-") + ibNewUniqueGuid.str() + ibT(".locks")));
+	{
+		ibLockFile file(path);
+		const std::uintmax_t empty = std::filesystem::file_size(ibPathOf(path), error);
+		const ibGuid owner = ibNewUniqueGuid;
+		const int slot = file.TakeSlot(owner, ibT("reclaim"), ibT("here"));
+		const ibString ns = ibT("LockRace.Reclaim");
+		for (int round = 0; round < 32; ++round) {   // ~1.6 MB of rows: the rooms left behind pass a megabyte
+			file.Change({ ns }, [&](ibLockFile::ibBatch& batch) {
+				for (int n = 0; n < 500; ++n) {
+					ibLockFile::ibRow row;
+					row.m_lockGuid  = ibNewUniqueGuid;
+					row.m_owner     = owner;
+					row.m_slot      = slot;
+					row.m_since     = ibDateTime::Now();
+					row.m_namespace = ns;
+					row.m_keyHash   = ibString::Format(ibT("%d-%d"), round, n);
+					row.m_keyData   = ibString::Format(ibT("Key=%08x"), round * 1000 + n);
+					batch.Add(std::move(row));
+				}
+			});
+		}
+		EXPECT_GT(std::filesystem::file_size(ibPathOf(path), error), empty + 2 * 1024 * 1024);
+		file.ChangeEach([](std::vector<ibLockFile::ibRow>& rows) { rows.clear(); return true; });
+		file.FreeSlot(slot);
+		EXPECT_EQ(std::filesystem::file_size(ibPathOf(path), error), empty);
+		EXPECT_TRUE(file.ReadAll().empty());
+	}
+	std::filesystem::remove(ibPathOf(path), error);
+}
+
+// ⭐ THE OWNERS A BASE HAS AT ONCE ARE NOT A NUMBER IN THE LAYOUT (2026-11-27: 1024 slots, and the next owner refused):
+// once every slot made is held, a page more is made.
+TEST(LockFile, TakeSlot_PastOnePage_MakesAnother)
+{
+	std::error_code error;
+	const ibString path = ibTextOf(std::filesystem::temp_directory_path(error)
+		/ ibPathOf(ibT("oes-slots-") + ibNewUniqueGuid.str() + ibT(".locks")));
+	{
+		ibLockFile file(path);
+		std::set<int> taken;
+		std::map<int, ibGuid> owners;
+		for (int n = 0; n < 1500; ++n) {
+			const ibGuid owner = ibNewUniqueGuid;
+			const int slot = file.TakeSlot(owner, ibT("slots"), ibT("here"));
+			EXPECT_TRUE(taken.insert(slot).second) << slot;
+			owners[slot] = owner;
+		}
+		ASSERT_GE(*taken.rbegin(), 1024);
+		const int far = *taken.rbegin();
+		const ibLockFile::ibOwner read = file.ReadSlot(far);
+		EXPECT_TRUE(read.m_used);
+		EXPECT_TRUE(read.m_owner == owners[far]);
+		for (const int slot : taken)
+			file.FreeSlot(slot);
+		EXPECT_FALSE(file.ReadSlot(far).m_used);
+	}
+	std::filesystem::remove(ibPathOf(path), error);
+}
+
+// ⭐ A REGION KEPT BY THE PROCESS IS THE FILE'S: rows added, raised and let go across two managers read back as the
+// file holds them — the second manager's view is the share's copy, the first's writes move its generation.
+TEST_F(LockRace, Acquire_ManyHeldRows_ReadBackAsWritten)
+{
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	std::vector<Outcome> held;
+	for (int n = 0; n < 50; ++n) {
+		held.push_back(TryAcquire(App(), n % 2 == 0 ? Mine() : Peer(), n % 2 == 0 ? &left : &right,
+			StockKey({ { ibT("Product"), ibValue(ibString::Format(ibT("many-%d"), n)) } }, ibLockMode::Shared), {}));
+		ASSERT_EQ(held.back().kind, OutcomeKind::Granted) << held.back().error;
+	}
+	const ibLockItem raised = StockKey({ { ibT("Product"), ibValue(ibString(ibT("many-10"))) } }, ibLockMode::Exclusive);
+	const Outcome upgrade = TryAcquire(App(), Mine(), &left, raised, {});
+	ASSERT_EQ(upgrade.kind, OutcomeKind::Granted) << upgrade.error;
+	{
+		ibApplicationInstanceScope bound(App());
+		for (int n = 0; n < 50; n += 3)
+			held[n].handle.Release();
+	}
+	int kept = 0;
+	for (const ibLockSnapshotRow& row : Peer()->GetSnapshot())
+		if (row.namespaceName.Cmp(ibT("LockRace.Stock")) == 0 && row.keyData.Contains(ibT("Product=")))
+			++kept;
+	EXPECT_EQ(kept, 50 - 17);
+	const std::vector<ibLockSnapshotRow> rows = RowsOf(Peer(), raised);
+	ASSERT_EQ(rows.size(), 1u);
+	EXPECT_EQ(rows.front().lockMode, ibLockMode::Exclusive);
+	const Outcome blocked = TryAcquire(App(), Peer(), &right, raised, {});
+	EXPECT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
+}
+
+// ⭐ A BATCH REFUSED BY ONE KEY HOLDS NONE OF THEM (2026-11-27, the batch's keys asked before any row is written): the
+// process's copy of the region is the file's after it, and the first key is free for the other owner.
+TEST_F(LockRace, Acquire_BatchRefusedByItsSecondKey_HoldsNoneOfIt)
+{
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	const ibLockItem first  = StockKey({ { ibT("Product"), ibValue(ibString(ibT("batch-1"))) } }, ibLockMode::Exclusive);
+	const ibLockItem second = StockKey({ { ibT("Product"), ibValue(ibString(ibT("batch-2"))) } }, ibLockMode::Exclusive);
+	const Outcome held = TryAcquire(App(), Peer(), &right, second, {});
+	ASSERT_EQ(held.kind, OutcomeKind::Granted) << held.error;
+	{
+		ibApplicationInstanceScope bound(App());
+		EXPECT_THROW(Mine()->Acquire({ first, second }, {}, &left), ibBackendLockException);
+	}
+	EXPECT_TRUE(RowsOf(Mine(), first).empty());
+	EXPECT_TRUE(RowsOf(Peer(), first).empty());
+	const Outcome after = TryAcquire(App(), Peer(), &right, first, {});
+	EXPECT_EQ(after.kind, OutcomeKind::Granted) << after.error;
+}
+
+// ⭐ A REGION MOSTLY LET GO IS WRITTEN AGAIN WITHOUT WHAT WAS (2026-11-27, a row let go stays in place until then): the
+// rows left read back as held, and still refuse.
+TEST_F(LockRace, Release_MostOfARegion_TheRestStillHeld)
+{
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	std::vector<Outcome> held;
+	for (int n = 0; n < 40; ++n) {
+		held.push_back(TryAcquire(App(), Mine(), &left,
+			StockKey({ { ibT("Product"), ibValue(ibString::Format(ibT("compact-%d"), n)) } }, ibLockMode::Exclusive), {}));
+		ASSERT_EQ(held.back().kind, OutcomeKind::Granted) << held.back().error;
+	}
+	{
+		ibApplicationInstanceScope bound(App());
+		for (int n = 0; n < 40; ++n)
+			if (n % 10 != 0)
+				held[n].handle.Release();
+	}
+	for (int n = 0; n < 40; ++n) {
+		const Outcome other = TryAcquire(App(), Peer(), &right,
+			StockKey({ { ibT("Product"), ibValue(ibString::Format(ibT("compact-%d"), n)) } }, ibLockMode::Exclusive), {});
+		EXPECT_EQ(other.kind, n % 10 == 0 ? OutcomeKind::Conflict : OutcomeKind::Granted) << n << ": " << other.error;
+	}
+}
+
+TEST_F(LockRace, Acquire_KeysOfOneTable_ConflictWhenTheyMeet)
+{
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	const Outcome held = TryAcquire(App(), Mine(), &left,
+		StockKey({ { ibT("Product"),   ibValue(ibString(ibT("A"))) },
+		           { ibT("Warehouse"), ibValue(ibString(ibT("W"))) } }, ibLockMode::Exclusive), {});
+	ASSERT_EQ(held.kind, OutcomeKind::Granted) << held.error;
+
+	const Outcome sameProduct = TryAcquire(App(), Peer(), &right, StockKey({ { ibT("Product"), ibValue(ibString(ibT("A"))) } }, ibLockMode::Shared), {});
+	EXPECT_EQ(sameProduct.kind, OutcomeKind::Conflict) << sameProduct.error;
+	const Outcome wholeTable = TryAcquire(App(), Peer(), &right, StockKey({}, ibLockMode::Shared), {});
+	EXPECT_EQ(wholeTable.kind, OutcomeKind::Conflict) << wholeTable.error;
+	const Outcome otherProduct = TryAcquire(App(), Peer(), &right, StockKey({ { ibT("Product"), ibValue(ibString(ibT("B"))) } }, ibLockMode::Exclusive), {});
+	EXPECT_EQ(otherProduct.kind, OutcomeKind::Granted) << otherProduct.error;
+}
+
+// ⭐ A TIMEOUT WAITS A HELD LOCK OUT (2026-11-26): asked again until the holder lets go — here an owner of the other
+// manager, woken by its slot's byte — and refused once the time is up.
+TEST_F(LockRace, Acquire_WithTimeout_WaitsForTheHolder)
+{
+	const ibLockItem item = StockKey({ { ibT("Product"), ibValue(ibString(ibT("C"))) } }, ibLockMode::Exclusive);
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	Outcome held = TryAcquire(App(), Mine(), &left, item, {});
+	ASSERT_EQ(held.kind, OutcomeKind::Granted) << held.error;
+
+	ibLockOptions patient;
+	patient.timeoutMs = 5000;
+	std::thread releaser([&] {
+		std::this_thread::sleep_for(std::chrono::milliseconds(400));
+		ibApplicationInstanceScope bound(App());
+		held.handle.Release();
+	});
+	const Outcome waited = TryAcquire(App(), Peer(), &right, item, patient);
+	releaser.join();
+	EXPECT_EQ(waited.kind, OutcomeKind::Granted) << waited.error;
+
+	ibLockOptions brief;
+	brief.timeoutMs = 300;
+	const auto began = std::chrono::steady_clock::now();
+	const Outcome refused = TryAcquire(App(), Mine(), &left, item, brief);
+	EXPECT_EQ(refused.kind, OutcomeKind::Conflict) << refused.error;
+	EXPECT_GE(std::chrono::steady_clock::now() - began, std::chrono::milliseconds(300));
+}
+
+// ⭐ A WAIT THAT COMES BACK TO THE WAITER IS REFUSED AT ONCE, across managers: each writes whom it waits for in its slot,
+// and the second to wait reads the cycle there.
+TEST_F(LockRace, Acquire_WaitingForEachOther_IsADeadlock)
+{
+	const ibLockItem first = Item(ibT("deadlock-a"), ibLockMode::Exclusive);
+	const ibLockItem second = Item(ibT("deadlock-b"), ibLockMode::Exclusive);
+	ibSingleLockHolder left(ibT("left"));
+	ibSingleLockHolder right(ibT("right"));
+	Outcome leftHolds = TryAcquire(App(), Mine(), &left, first, {});
+	const Outcome rightHolds = TryAcquire(App(), Peer(), &right, second, {});
+	ASSERT_EQ(leftHolds.kind, OutcomeKind::Granted) << leftHolds.error;
+	ASSERT_EQ(rightHolds.kind, OutcomeKind::Granted) << rightHolds.error;
+
+	ibLockOptions patient;
+	patient.timeoutMs = 5000;
+	Outcome rightWaited;
+	std::thread waiter([&] { rightWaited = TryAcquire(App(), Peer(), &right, first, patient); });
+	std::this_thread::sleep_for(std::chrono::milliseconds(300));   // right waits for left by now
+
+	const auto began = std::chrono::steady_clock::now();
+	const Outcome leftWaited = TryAcquire(App(), Mine(), &left, second, patient);
+	EXPECT_EQ(leftWaited.kind, OutcomeKind::Deadlock) << leftWaited.error;
+	EXPECT_LT(std::chrono::steady_clock::now() - began, std::chrono::milliseconds(2000));
+	{
+		ibApplicationInstanceScope bound(App());
+		leftHolds.handle.Release();
+	}
+	waiter.join();
+	EXPECT_EQ(rightWaited.kind, OutcomeKind::Granted) << rightWaited.error;
+}
 
 } // namespace

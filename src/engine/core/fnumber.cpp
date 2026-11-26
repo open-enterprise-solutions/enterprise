@@ -1128,6 +1128,29 @@ int ibNumber::ToIntBig() const
 	return static_cast<int>(v);
 }
 
+// Cold half only — an immediate number is hashed in the header (see ibNumber::GetHash there). Nine zeros a step while
+// they last, then one, so a 10^200 is not two hundred long divisions.
+std::uint64_t ibNumber::GetHashBig() const
+{
+	BigImpl b;
+	LoadBig(b);
+	BigImpl::TrimMag(b.limbs);
+	if (!b.IsZero()) {
+		for (; BigImpl::ModMagSmall(b.limbs, 1000000000u) == 0; b.exp += 9)
+			BigImpl::DivMagSmall(b.limbs, 1000000000u);
+		for (; BigImpl::ModMagSmall(b.limbs, 10u) == 0; ++b.exp)
+			BigImpl::DivMagSmall(b.limbs, 10u);
+	}
+	int64_t mant;
+	if (b.MagToInt64(mant))
+		return HashImmediate(mant, b.exp);
+	std::uint64_t h = ibHashStep(kIbHashBasis, b.negative ? 1u : 0u);
+	h = ibHashStep(h, static_cast<std::uint64_t>(static_cast<int64_t>(b.exp)));
+	for (const uint32_t limb : b.limbs)
+		h = ibHashStep(h, limb);
+	return h;
+}
+
 // …and of ToUInt.
 unsigned int ibNumber::ToUIntBig() const
 {

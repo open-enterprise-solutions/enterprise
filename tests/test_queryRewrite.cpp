@@ -234,7 +234,7 @@ TEST(QueryRewrite, NoFlatten_InnerAllowed)
 {
 	// ALLOWED merged away would turn "show me what I may see" back into a refusal — and the query
 	// would still run, which is what makes this the silent kind of wrong. (The parser refuses INTO
-	// and FOR UPDATE inside a source, so ALLOWED is the one of the three that can reach here.)
+	// inside a source, so ALLOWED is the one of the two that can reach here.)
 	auto sel = ParseAndRewrite(
 		wxT("SELECT Code FROM (SELECT ALLOWED Code FROM Catalog.Products) AS s"));
 	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
@@ -282,12 +282,11 @@ TEST(QueryRewrite, CloneCarriesTheStatementWords)
 	// execution while the parse still showed it.
 	ibQueryParser parser;
 	ibQuerySelectPtr ast = parser.Parse(
-		wxT("SELECT ALLOWED Code FROM Catalog.Products WHERE Code = \"1\" FOR UPDATE"));
+		wxT("SELECT ALLOWED Code FROM Catalog.Products WHERE Code = \"1\""));
 	ASSERT_TRUE(ast != nullptr);
 
 	ibQuerySelectPtr rewritten = ibQueryRewrite::Rewrite(*ast);
 	EXPECT_TRUE(rewritten->m_allowed);
-	EXPECT_TRUE(rewritten->m_forUpdate);
 }
 
 //////////////////////////////////////////////////////////////////////
