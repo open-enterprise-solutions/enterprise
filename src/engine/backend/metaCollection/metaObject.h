@@ -610,7 +610,7 @@ public:
 	virtual bool OnDeleteMetaObject();
 	// AN OBJECT OTHERS STAND ON REFUSES TO GO — asked by ibMetaData::RemoveMetaObject BEFORE anything is closed,
 	// so a refusal leaves the object exactly as it was. It raises (ibBackendCoreException) with a sentence that
-	// names the object and the first one that needs it; the designer's verb and MCP hand that sentence back.
+	// names the object and the first one that needs it; the studio's verb and MCP hand that sentence back.
 	// The default stands on nothing. (OnDeleteMetaObject is too late for it: the close phases have run.)
 	virtual void RefuseDelete() const {}
 	virtual bool OnRenameMetaObject(const ibString& sNewName) { return true; }
