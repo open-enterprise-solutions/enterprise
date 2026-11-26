@@ -149,7 +149,7 @@ TEST(DocumentNumerator, TheSettingsAndTheBindingRoundTrip)
 	EXPECT_EQ(doc, numerator->GetMembers().front());
 }
 
-// Through the whole configuration file, as the designer saves and opens it.
+// Through the whole configuration file, as the studio saves and opens it.
 TEST(DocumentNumerator, TheConfigurationFileKeepsTheNumeratorAndItsMembers)
 {
 	const ibString path = wxFileName::CreateTempFileName(wxT("oesnum"));
