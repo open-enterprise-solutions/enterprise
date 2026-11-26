@@ -1100,6 +1100,47 @@ TEST_F(AcceptanceAccumulation, ALockTakesAnyConditionAndKeysItsEqualities)
 		nails, &misspelt)) << "a name no key reads is refused, as a query refuses it";
 }
 
+// ⭐ A RANGE KEYS ITS FIELD (2026-11-27, Max: "if I do not want BETWEEN, just greater or equal"): two conditions on
+// `Period` meet into one key, a writer of a period in it is refused, one outside it is not — `<` leaves its bound out.
+TEST_F(AcceptanceAccumulation, ALockOfARangeHoldsThePeriodsInIt)
+{
+	if (!ready) return;
+	ibLockManager* const locks = ibApplicationInstance::GetLockManager();
+	ASSERT_NE(locks, nullptr);
+
+	const auto session = std::make_shared<ibSession>(ibT("lock-range"), ibSessionKind::Service);
+	ibSessionScope bound(session.get());
+	const ibSourceMetaDataScope application(cfg.get());
+
+	ibSingleLockHolder other(ibT("another session"));
+	const auto writeKey = [this](const ibDateTime& period) {   // a writer's key: every field it writes
+		ibLockItem key = ibLockItem::ForNamespace(reg->GetDocPath());
+		key.keyFields.emplace_back(reg->GetRegisterPeriod()->GetName(), ibValue(period));
+		key.keyFields.emplace_back(ibT("Item"), ibValue(ibString(ibT("Nails"))));
+		return std::vector<ibLockItem>{ key };
+	};
+	const std::map<ibString, ibValue> january = {
+		{ ibT("From"), ibValue(ibDateTime(2026, 1, 1)) },
+		{ ibT("To"),   ibValue(ibDateTime(2026, 2, 1)) },
+	};
+
+	ibQueryTempDataStore manager;
+	const std::vector<ibQueryLowering::ibQueryPackageResult> answers = ibQueryLowering::ExecutePackage(
+		ibQueryParser().ParsePackage(ibT("LOCK FROM AccumulationRegister.Stock WHERE Period >= &From AND Period < &To")),
+		january, &manager);
+	ASSERT_EQ(answers.size(), 1u);
+	ASSERT_NE(answers.front().m_result, nullptr);
+	ASSERT_TRUE(answers.front().m_result->Next());
+	EXPECT_EQ(answers.front().m_result->GetColumn(ibT("Count")).GetNumber().ToInt(), 1) << "one key: the month";
+	EXPECT_THROW(locks->Acquire(writeKey(ibDateTime(2026, 1, 15, 10, 0, 0)), {}, &other), ibBackendLockException)
+		<< "a period in it";
+	EXPECT_THROW(locks->Acquire(writeKey(ibDateTime(2026, 1, 31, 23, 59, 59, 999)), {}, &other), ibBackendLockException)
+		<< "its last millisecond";
+	EXPECT_NO_THROW(locks->Acquire(writeKey(ibDateTime(2026, 2, 1)), {}, &other)) << "the bound `<` leaves out";
+	EXPECT_NO_THROW(locks->Acquire(writeKey(ibDateTime(2025, 12, 31, 23, 59, 59)), {}, &other)) << "before it";
+	manager.Close();
+}
+
 // A RECORD SET'S `LockForUpdate` IS ITS OWN PROPERTY, read back as it was set (stage 12): appended with no data of its
 // own, its row answered no place, and `rs.LockForUpdate = True` went nowhere — the read held the set shared, and a
 // second session read alongside it (found live 2026-11-26).

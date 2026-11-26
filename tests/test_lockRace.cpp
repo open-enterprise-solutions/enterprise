@@ -321,6 +321,72 @@ TEST(LockKey, FieldsHash_TheNamesNotTheValues)
 	EXPECT_NE(ibLockKey::FieldsHash(ibString()), 0u);   // 0 stays "not known"
 }
 
+// ⭐ A VALUE MEETS A RANGE IT LIES IN (2026-11-27, `LOCK … WHERE Period BETWEEN &From AND &To`): a date and a number
+// are written as themselves, so the range is read against a writer's key; an open bound holds everything on its side,
+// and a value of no order (a reference's hash) meets any range, a lock wider than asked.
+TEST(LockKey, Overlap_ValueInRange_Meet)
+{
+	const ibDateTime from(2026, 1, 1, 0, 0, 0), to(2026, 1, 31, 23, 59, 59);
+	const ibString january = ibLockKey::Canonicalize({}, { { ibT("Period"), ibValue(from), ibValue(to) } });
+	const ibString onward  = ibLockKey::Canonicalize({}, { { ibT("Period"), ibValue(from), ibValue() } });
+	const ibString amounts = ibLockKey::Canonicalize({}, { { ibT("Amount"), ibValue(ibNumber(10)),
+	                                                         ibValue(ibNumber(20)) } });
+	const auto at = [](const ibDateTime& date) {
+		return ibLockKey::Canonicalize({ { ibT("Period"), ibValue(date) },
+		                                 { ibT("Product"), ibValue(ibString(ibT("A"))) } });
+	};
+	const ibString text = ibLockKey::Canonicalize({ { ibT("Period"), ibValue(ibString(ibT("x"))) } });
+
+	EXPECT_TRUE(ibLockKey::Overlap(january, at(ibDateTime(2026, 1, 15, 10, 0, 0))));
+	EXPECT_TRUE(ibLockKey::Overlap(at(from), january));   // both bounds in it
+	EXPECT_TRUE(ibLockKey::Overlap(at(to), january));
+	EXPECT_FALSE(ibLockKey::Overlap(january, at(ibDateTime(2026, 2, 1, 0, 0, 0))));
+	EXPECT_FALSE(ibLockKey::Overlap(january, at(ibDateTime(2025, 12, 31, 23, 59, 59))));
+	EXPECT_TRUE(ibLockKey::Overlap(onward, at(ibDateTime(2030, 6, 1, 0, 0, 0))));
+	EXPECT_FALSE(ibLockKey::Overlap(onward, at(ibDateTime(2025, 6, 1, 0, 0, 0))));
+
+	EXPECT_TRUE(ibLockKey::Overlap(amounts, ibLockKey::Canonicalize({ { ibT("Amount"), ibValue(ibNumber(15)) } })));
+	EXPECT_TRUE(ibLockKey::Overlap(amounts, ibLockKey::Canonicalize({ { ibT("Amount"), ibValue(ibNumber(20)) } })));
+	EXPECT_FALSE(ibLockKey::Overlap(amounts, ibLockKey::Canonicalize({ { ibT("Amount"), ibValue(ibNumber(21)) } })));
+	EXPECT_FALSE(ibLockKey::Overlap(amounts, ibLockKey::Canonicalize({ { ibT("Amount"), ibValue(ibNumber(9)) } })));
+
+	EXPECT_TRUE(ibLockKey::Overlap(january, text));
+	// A range open both ways is no field: the whole table, as a key that names nothing.
+	EXPECT_TRUE(ibLockKey::Canonicalize({}, { { ibT("Period"), ibValue(), ibValue() } }).IsEmpty());
+}
+
+// Two ranges meet where they cross — a January lock and a February one do not, however close.
+TEST(LockKey, Overlap_TwoRanges_MeetWhereTheyCross)
+{
+	const auto period = [](const ibDateTime& from, const ibDateTime& to) {
+		return ibLockKey::Canonicalize({}, { { ibT("Period"), ibValue(from), ibValue(to) } });
+	};
+	const ibString january  = period(ibDateTime(2026, 1, 1, 0, 0, 0), ibDateTime(2026, 1, 31, 23, 59, 59));
+	const ibString february = period(ibDateTime(2026, 2, 1, 0, 0, 0), ibDateTime(2026, 2, 28, 23, 59, 59));
+	const ibString midJanuaryToMidFebruary = period(ibDateTime(2026, 1, 15, 0, 0, 0), ibDateTime(2026, 2, 15, 0, 0, 0));
+
+	EXPECT_FALSE(ibLockKey::Overlap(january, february));
+	EXPECT_FALSE(ibLockKey::Overlap(february, january));
+	EXPECT_TRUE(ibLockKey::Overlap(january, midJanuaryToMidFebruary));
+	EXPECT_TRUE(ibLockKey::Overlap(midJanuaryToMidFebruary, february));
+	EXPECT_TRUE(ibLockKey::Overlap(january, january));
+}
+
+// A range keys by its text as well as its name: two ranges of one field have two signatures, so the lock file reads
+// them against each other (Overlap) instead of only as one text; a value of that field, a third.
+TEST(LockKey, FieldsHash_ARangeKeysByItsText)
+{
+	const auto period = [](int month) {
+		return ibLockKey::Canonicalize({}, { { ibT("Period"), ibValue(ibDateTime(2026, month, 1, 0, 0, 0)),
+		                                       ibValue(ibDateTime(2026, month, 28, 0, 0, 0)) } });
+	};
+	const ibString value = ibLockKey::Canonicalize({ { ibT("Period"), ibValue(ibDateTime(2026, 1, 1, 0, 0, 0)) } });
+
+	EXPECT_EQ(ibLockKey::FieldsHash(period(1)), ibLockKey::FieldsHash(period(1)));
+	EXPECT_NE(ibLockKey::FieldsHash(period(1)), ibLockKey::FieldsHash(period(2)));
+	EXPECT_NE(ibLockKey::FieldsHash(period(1)), ibLockKey::FieldsHash(value));
+}
+
 // ⭐ A FILE THAT GREW IS CUT BACK ONCE NOBODY HOLDS ANYTHING (2026-11-26: 4.3 MB, nothing held): a region grown by
 // doubling leaves its old rooms behind, and the last slot let go takes them back.
 TEST(LockFile, FreeSlot_LastOne_CutsTheFileBack)

@@ -5118,6 +5118,7 @@ std::shared_ptr<void> ibDbTableProvider::ExecuteLock(const ibDataQuerySpec& spec
 		// ⭐ A KEY IS THE VALUE AS ITS FIELD HOLDS IT — brought to the field's type as a written value is when it is set
 		// (a number rounded to the field's scale): a LOCK's `Price = &P` with more digits than the field, or of another
 		// kind, keyed apart from the row a writer of it holds. A field no column of the table is named by keys as given.
+		// A range's bounds stay as written: one rounded inward (`> 1.006` to `> 1.01`) leaves out a value it holds.
 		for (auto& [name, value] : item.keyFields)
 			if (const std::shared_ptr<const ibBackendQueryColumn> column = queryable->ResolveColumnByName(name))
 				value = ibValueTypeDescription::AdjustValue(column->GetTypeDesc(), std::move(value), queryable->GetMetaData());

@@ -46,7 +46,7 @@ struct BACKEND_API ibLockSnapshotRow {
 	ibGuid       lockGuid;
 	ibGuid       sessionGuid;
 	ibString     namespaceName;
-	ibString     keyData;          // the key: "field=<value hash>;…" (ibLockKey::Canonicalize)
+	ibString     keyData;          // the key: "field=<value>;…" (ibLockKey::Canonicalize)
 	ibLockMode   lockMode;
 	ibDateTime   acquiredAt;
 	ibString     userName;

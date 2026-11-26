@@ -12,12 +12,13 @@
 
 #include "backend/lock/lockTypes.h"                // ibLockItem — the keys a table's provider is handed
 #include "backend/query/queryable.h"               // ibSourceMetaDataScope::GetFactory
+#include "backend/query/queryHierarchy.h"          // ibQueryHierarchyScope — the subtree an IN HIERARCHY names
 #include "backend/query/queryTempStore.h"          // ibQueryTempDataStore — the LOCK kept under its name
 #include "backend/query/queryableFactory.h"        // DescribeParameters — which argument of a virtual table is its condition
 #include "core/query/queryRender.h"                // ibQuerySourceName, ibRenderQueryExpr
 #include "core/query/queryRewrite.h"               // ibQueryFlattenAnd / ibQueryFoldAnd — a condition, one conjunct at a time
 
-#include <algorithm>   // std::min — a source's table, its first two names; std::any_of
+#include <algorithm>   // std::min — a source's table, its first two names; std::any_of, std::find_if
 #include <set>
 
 using namespace ibLowering;
@@ -43,15 +44,20 @@ struct ibKeyField
 	ibString m_name;
 };
 
-// ONE CONDITION, read as a key says it: `field = value`, `field IN (…)`, `(fields) IN (SELECT …)`, or a tie
-// `field = <other table>.field` — or as no key holds it (ReadTerm).
+// ONE CONDITION, read as a key says it: `field = value`, `field IN (…)`, `(fields) IN (SELECT …)`, a range
+// `field BETWEEN a AND b` / `field >= value`, or a tie `field = <other table>.field` — or as no key holds it
+// (ReadTerm).
 struct ibKeyTerm
 {
 	ibQueryAstExprPtr              m_written;              // as written — what a read without a table keeps
 	std::vector<ibKeyField>        m_fields;               // one, a row's, a tie's two sides — or every field it reads
 	std::vector<bool>              m_keys;                 // per field: whether this condition keys its table
 	std::vector<ibQueryAstExprPtr> m_values;               // `= value` / `IN (list)`
+	ibQueryAstExprPtr              m_from, m_to;           // a range: `>= from`, `< to`, BETWEEN both; null — open
+	bool                           m_fromExcluded = false; // `>` — the bound itself is not in it
+	bool                           m_toExcluded   = false; // `<`
 	bool                           m_in = false;           // IN — a value that is a collection stands for its elements
+	ibQueryDimUnfold               m_unfold = ibQueryDimUnfold::Elements;   // IN HIERARCHY — a value, for its subtree
 	std::shared_ptr<ibQuerySelect> m_select;               // `IN (SELECT …)`
 	bool                           m_tie = false;
 	bool                           m_unkeyed = false;      // no key holds it: it narrows nothing, its names checked as a query's
@@ -153,10 +159,10 @@ std::vector<ibKeyField> FieldsOf(const std::vector<ibHeldTable>& tables, const i
 // One conjunct, read as a key — or as a condition no key holds.
 ibKeyTerm ReadTerm(const std::vector<ibHeldTable>& tables, const ibQueryAstExprPtr& written, size_t own)
 {
-	// ⭐ ANY OTHER CONDITION IS A QUERY'S, written as in any query (Max, 2026-11-26) — a range, `<`, OR, LIKE, a walk
-	// through a reference, a field against a field of its own table. It narrows nothing: the fields it reads are held
-	// whole, by whatever else keys their table; and it stays in every read of the statement that keeps the tables it
-	// reads (TiedSet).
+	// ⭐ ANY OTHER CONDITION IS A QUERY'S, written as in any query (Max, 2026-11-26) — `<>`, OR, LIKE, a walk through a
+	// reference, a field against a field of its own table. It narrows nothing: the fields it reads are held whole, by
+	// whatever else keys their table; and it stays in every read of the statement that keeps the tables it reads
+	// (TiedSet). A range keys its field (Max, 2026-11-27: "I will just give the parameters of what to lock").
 	const auto unkeyed = [&tables, &written, own] {
 		ibKeyTerm term;
 		term.m_written = written;
@@ -191,8 +197,35 @@ ibKeyTerm ReadTerm(const std::vector<ibHeldTable>& tables, const ibQueryAstExprP
 		else
 			return unkeyed();
 	}
-	else if (e.m_kind == ibQueryAstExprKind::In && !e.m_negated && e.m_unfold == ibQueryDimUnfold::Elements && e.m_lhs) {
-		term.m_in = true;
+	else if (e.m_kind == ibQueryAstExprKind::Compare && e.m_cmp != ibQueryCompareOp::Ne && e.m_lhs && e.m_rhs) {
+		// ONE SIDE OF A RANGE — `field >= value`, `value < field`: the field's side whichever it is written on.
+		const bool lhsField = IsKeyField(tables, *e.m_lhs) && IsValue(*e.m_rhs);
+		if (!lhsField && !(IsKeyField(tables, *e.m_rhs) && IsValue(*e.m_lhs)))
+			return unkeyed();
+		term.m_fields = { FieldOf(tables, lhsField ? *e.m_lhs : *e.m_rhs, own) };
+		const ibQueryAstExprPtr& value = lhsField ? e.m_rhs : e.m_lhs;
+		const bool excluded = e.m_cmp == ibQueryCompareOp::Gt || e.m_cmp == ibQueryCompareOp::Lt;
+		if ((e.m_cmp == ibQueryCompareOp::Gt || e.m_cmp == ibQueryCompareOp::Ge) == lhsField) {   // the field above it
+			term.m_from         = value;
+			term.m_fromExcluded = excluded;
+		}
+		else {
+			term.m_to         = value;
+			term.m_toExcluded = excluded;
+		}
+	}
+	else if (e.m_kind == ibQueryAstExprKind::Between && !e.m_negated && e.m_lhs && e.m_low && e.m_high) {
+		if (!IsKeyField(tables, *e.m_lhs) || !IsValue(*e.m_low) || !IsValue(*e.m_high))
+			return unkeyed();
+		term.m_fields = { FieldOf(tables, *e.m_lhs, own) };
+		term.m_from   = e.m_low;
+		term.m_to     = e.m_high;
+	}
+	else if (e.m_kind == ibQueryAstExprKind::In && !e.m_negated && e.m_lhs) {
+		term.m_in     = true;
+		term.m_unfold = e.m_unfold;   // IN HIERARCHY names its subtree by a field and a value, never a row or a select
+		if (e.m_unfold != ibQueryDimUnfold::Elements && (e.m_subquery || e.m_lhs->m_kind == ibQueryAstExprKind::Row))
+			return unkeyed();
 		if (e.m_lhs->m_kind == ibQueryAstExprKind::Row) {
 			if (!e.m_subquery)
 				return unkeyed();
@@ -374,8 +407,32 @@ ibKeySet Meet(const ibKeySet& a, const ibKeySet& b)
 	return met;
 }
 
-// THE VALUES A CONDITION GIVES ITS TABLE — written ones, or the rows of its select.
-ibKeySet SetOf(const ibKeyTerm& term, const std::map<ibString, ibValue>& params)
+// TWO RANGES OF ONE FIELD MET — the later from, the earlier to: `Period >= &A AND Period < &B`. A bound neither a date
+// nor a number is open (ibLockRange); two of no order between them (a date against a number) keep the first's, which
+// holds their meeting and more.
+ibLockRange Meet(const ibLockRange& a, const ibLockRange& b)
+{
+	const auto ordered = [](const ibValue& v) {
+		return v.GetType() == ibValueTypes::TYPE_DATE || v.GetType() == ibValueTypes::TYPE_NUMBER;
+	};
+	const auto order = [](const ibValue& x, const ibValue& y) {   // y against x; 0 — one, or no order between them
+		if (x.GetType() != y.GetType())
+			return 0;
+		if (x.GetType() == ibValueTypes::TYPE_NUMBER)
+			return y.GetNumber().Compare(x.GetNumber());
+		return y.GetDate() < x.GetDate() ? -1 : x.GetDate() < y.GetDate() ? 1 : 0;
+	};
+
+	ibLockRange met = a;
+	if (!ordered(met.from) || (ordered(b.from) && order(met.from, b.from) > 0))
+		met.from = b.from;
+	if (!ordered(met.to) || (ordered(b.to) && order(met.to, b.to) < 0))
+		met.to = b.to;
+	return met;
+}
+
+// THE VALUES A CONDITION GIVES ITS TABLE — written ones, the subtrees they name, or the rows of its select.
+ibKeySet SetOf(const std::vector<ibHeldTable>& tables, const ibKeyTerm& term, const std::map<ibString, ibValue>& params)
 {
 	std::vector<ibString> fields;
 	for (const ibKeyField& field : term.m_fields)
@@ -388,6 +445,16 @@ ibKeySet SetOf(const ibKeyTerm& term, const std::map<ibString, ibValue>& params)
 		if (columns != fields.size())
 			ThrowQueryException(term.m_written->m_line, term.m_written->m_col,
 				_("IN (SELECT ...) in a LOCK selects as many fields as it is compared with: '%s'"), ibRenderQueryExpr(*term.m_written));
+	}
+	else if (term.m_unfold != ibQueryDimUnfold::Elements) {
+		// IN HIERARCHY — the named values and everything under them, read through the field as a query reads it, as
+		// the subtree stands now: an item put into the group later is not held.
+		const std::shared_ptr<const ibBackendQueryable>& table = tables[term.m_fields.front().m_table].m_q;
+		const ibQueryHierarchyScope subtree(table, table->ResolveColumnByName(fields.front()),
+			ibQueryHierarchyNamedValues(term.m_values.empty() ? ibValue() : EvalValue(*term.m_values.front(), params)),
+			term.m_unfold);
+		for (const ibValue& value : subtree.Accepted())
+			tuples.push_back({ value });
 	}
 	else
 		for (const ibQueryAstExprPtr& written : term.m_values) {
@@ -403,6 +470,26 @@ ibKeySet SetOf(const ibKeyTerm& term, const std::map<ibString, ibValue>& params)
 				tuples.push_back({ element });
 		}
 	return MakeSet(std::move(fields), std::move(tuples));
+}
+
+// THE VALUES A RANGE GIVES ITS FIELD — both bounds in it, as the lock file keeps a range. A date's bound a `>` or `<`
+// leaves out moves a millisecond inward, the date's own step; a number's stays in, the lock one value wider than asked.
+ibLockRange RangeOf(const ibKeyTerm& term, const std::map<ibString, ibValue>& params)
+{
+	const auto bound = [&params](const ibQueryAstExprPtr& written, bool excluded, long long step) {
+		if (!written)
+			return ibValue();
+		ibValue value = EvalValue(*written, params);
+		if (excluded && value.GetType() == ibValueTypes::TYPE_DATE)
+			value = ibValue(value.GetDate().AddMilliseconds(step));
+		return value;
+	};
+
+	ibLockRange range;
+	range.field = term.m_fields.front().m_name;
+	range.from  = bound(term.m_from, term.m_fromExcluded, 1);
+	range.to    = bound(term.m_to, term.m_toExcluded, -1);
+	return range;
 }
 
 // THE STATEMENT READ WITHOUT ONE OF ITS TABLES — where the values a tie gives that table come from, so a value the
@@ -519,9 +606,9 @@ long ibLowering::ExecuteLock(const ibQueryAstLock& lock, const std::map<ibString
 		ibQueryLowering::CheckNames(named, params);
 	}
 
-	// EACH TABLE'S KEYS — its sets met; a table no condition keys is locked whole — handed to its provider through the
-	// door, which holds them its own way. A table whose provider holds nothing (a temporary table: no other session
-	// writes it) is refused.
+	// EACH TABLE'S KEYS — its sets met, its ranges with them; a table no condition keys is locked whole — handed to its
+	// provider through the door, which holds them its own way. A table whose provider holds nothing (a temporary table:
+	// no other session writes it) is refused.
 	const ibLockMode mode = lock.m_mode == ibQueryLockModeAst::Shared ? ibLockMode::Shared : ibLockMode::Exclusive;
 	const auto holds = std::make_shared<std::vector<std::shared_ptr<void>>>();
 	long keys = 0;
@@ -534,6 +621,7 @@ long ibLowering::ExecuteLock(const ibQueryAstLock& lock, const std::map<ibString
 		};
 
 		std::vector<ibKeySet> sets;
+		std::vector<ibLockRange> ranges;   // a field each, its conditions met
 		std::vector<ibKeyField> tied, asked;
 		for (const ibKeyTerm& term : terms) {
 			if (term.m_unkeyed)
@@ -546,24 +634,42 @@ long ibLowering::ExecuteLock(const ibQueryAstLock& lock, const std::map<ibString
 					}
 				continue;
 			}
-			if (term.m_fields.front().m_table == t && term.m_keys.front())
-				sets.push_back(SetOf(term, params));
+			if (term.m_fields.front().m_table != t || !term.m_keys.front())
+				continue;
+			if (!term.m_from && !term.m_to) {
+				sets.push_back(SetOf(tables, term, params));
+				continue;
+			}
+			const ibLockRange range = RangeOf(term, params);
+			const auto same = std::find_if(ranges.begin(), ranges.end(),
+				[&range](const ibLockRange& other) { return other.field.IsSameAs(range.field, false); });
+			if (same == ranges.end())
+				ranges.push_back(range);
+			else
+				*same = Meet(*same, range);
 		}
 		if (!tied.empty())
 			sets.push_back(TiedSet(tables, lock, terms, t, tied, asked, params));
 
-		if (sets.empty())
-			take(ibLockItem::ForNamespace(ibEmptyString, mode));
-		else {
-			ibKeySet key = sets.front();
+		// No set — one key of no field, the ranges its own; a field a value keys has no range, the value being the
+		// narrower. Neither — the table whole.
+		ibKeySet key;
+		key.m_tuples.emplace_back();
+		if (!sets.empty()) {
+			key = sets.front();
 			for (size_t s = 1; s < sets.size(); ++s)
 				key = Meet(key, sets[s]);
-			for (const std::vector<ibValue>& tuple : key.m_tuples) {
-				ibLockItem item = ibLockItem::ForNamespace(ibEmptyString, mode);
-				for (size_t f = 0; f < key.m_fields.size(); ++f)
-					item.keyFields.emplace_back(key.m_fields[f], tuple[f]);
-				take(std::move(item));
-			}
+		}
+		std::erase_if(ranges, [&key](const ibLockRange& range) {
+			return std::any_of(key.m_fields.begin(), key.m_fields.end(),
+				[&range](const ibString& field) { return field.IsSameAs(range.field, false); });
+		});
+		for (const std::vector<ibValue>& tuple : key.m_tuples) {
+			ibLockItem item = ibLockItem::ForNamespace(ibEmptyString, mode);
+			for (size_t f = 0; f < key.m_fields.size(); ++f)
+				item.keyFields.emplace_back(key.m_fields[f], tuple[f]);
+			item.keyRanges = ranges;
+			take(std::move(item));
 		}
 
 		// Taken — waited out while another session holds a key they share, as the provider waits; without a manager the

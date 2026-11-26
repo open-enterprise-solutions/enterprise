@@ -104,8 +104,8 @@ from s in Data.AccumulationRegisters.Stock.Balance
 
 - Taken before the first row is read. A `where` after it only filters; with none before it, the table is
   locked whole.
-- The `where` is read as a query's condition: `field == value` keys it, the rest narrows nothing. A `where`
-  that does not read as a query's condition is refused.
+- The `where` is read as a query's condition: `field == value` and a range (`field >= value`) key it, the rest
+  narrows nothing. A `where` that does not read as a query's condition is refused.
 - One source: beside a `join` or a second `from` it is refused - a query's `LOCK` says what a join locks.
 
 **Which records are locked:**
@@ -116,9 +116,15 @@ from s in Data.AccumulationRegisters.Stock.Balance
   `field = value`, `field IN (list)`, `field IN (SELECT …)`, `(f1, f2) IN (SELECT …)`,
   `field = <table>.field`, joined by `AND`. A field tied to nothing is any value; a table with no key is
   locked whole. Every table the statement names is locked.
-- **Any other condition is a query's, and narrows nothing** - a range, `<`, `OR`, `LIKE`, a walk through a
-  reference: its field is held whole. `WHERE Item = &Item AND Period BETWEEN &From AND &To` locks every
-  period of that item. Its names are checked as a query's.
+- **`field IN HIERARCHY (&Group)` locks the group and everything under it** - as the group stands when the
+  lock is taken: an item put into it afterwards is not held.
+- **A range of a date or a number keys its field:** `field BETWEEN a AND b`, `field >= a`, `> a`, `<= b`,
+  `< b`. `WHERE Item = &Item AND Period BETWEEN &From AND &To` locks that item in those periods only. Two
+  conditions on one field meet: `Period >= &From AND Period < &To`. A `>` or `<` of a number holds its
+  bound too. A range of a text or a reference narrows nothing; documents in order are a range of their
+  date - `Period` in a register, `Date` in the document's table.
+- **Any other condition is a query's, and narrows nothing** - `<>`, `OR`, `LIKE`, a walk through a
+  reference: its field is held whole. Its names are checked as a query's.
 - **A virtual table locks its table.** Its condition is part of the key, its period or date is not:
   `SliceLast(&Date, Product = &P)` locks every period of that product. A tabular section locks its
   object's table.
