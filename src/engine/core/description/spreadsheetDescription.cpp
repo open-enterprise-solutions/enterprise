@@ -178,13 +178,19 @@ bool ibSpreadsheetDescriptionMemory::LoadData(ibReaderMemory& reader, ibSpreadsh
 
 	ibReaderMemory dataReader(dataBuffer);
 
+	// ⭐ THE BREAKS AS THEY WERE STORED: the largest is the sheet's end, stood first, and the rest are the pages above
+	// it (AddRowBrake places a page below the end, and stands the end itself on a sheet that has none)
 	{
-		const size_t capacity = dataReader.r_u64();
-		for (std::uint64_t c = 0; c < capacity; c++) spreadsheetDesc.AddRowBrake(dataReader.r_s32());
+		std::vector<int> breaks(static_cast<size_t>(dataReader.r_u64()));
+		for (int& at : breaks) at = dataReader.r_s32();
+		if (!breaks.empty()) spreadsheetDesc.SetRowBrake(*std::max_element(breaks.begin(), breaks.end()));
+		for (const int at : breaks) spreadsheetDesc.AddRowBrake(at);
 	}
 	{
-		const size_t capacity = dataReader.r_u64();
-		for (std::uint64_t c = 0; c < capacity; c++) spreadsheetDesc.AddColBrake(dataReader.r_s32());
+		std::vector<int> breaks(static_cast<size_t>(dataReader.r_u64()));
+		for (int& at : breaks) at = dataReader.r_s32();
+		if (!breaks.empty()) spreadsheetDesc.SetColBrake(*std::max_element(breaks.begin(), breaks.end()));
+		for (const int at : breaks) spreadsheetDesc.AddColBrake(at);
 	}
 	{
 		const size_t capacity = dataReader.r_u64();
@@ -565,10 +571,19 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 			}
 		}
 
+		// the breaks as they were stored: the largest, the sheet's end, first — see LoadData
 		if (auto breaks = band->FindField(ibT("breaks"))) {
-			for (const ibDataValue& entry : breaks->AsArray()) {
-				if (rows) spreadsheetDesc.AddRowBrake((int)entry.AsInt());
-				else      spreadsheetDesc.AddColBrake((int)entry.AsInt());
+			std::vector<int> stored;
+			for (const ibDataValue& entry : breaks->AsArray())
+				stored.push_back((int)entry.AsInt());
+			if (!stored.empty()) {
+				const int end = *std::max_element(stored.begin(), stored.end());
+				if (rows) spreadsheetDesc.SetRowBrake(end);
+				else      spreadsheetDesc.SetColBrake(end);
+			}
+			for (const int at : stored) {
+				if (rows) spreadsheetDesc.AddRowBrake(at);
+				else      spreadsheetDesc.AddColBrake(at);
 			}
 		}
 

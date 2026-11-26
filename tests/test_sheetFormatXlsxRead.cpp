@@ -232,8 +232,7 @@ TEST(SheetFormatXlsxRead, PageBreaksWrittenComeBackAndTheSheetsEndIsNotOne)
 	ibSpreadsheetDescription sheet;
 	for (int row = 0; row < 6; row++)
 		sheet.SetCellValue(row, 0, ibT("x"));
-	sheet.SetRowBrake(5);   // the sheet's end, as PutArea stands it
-	sheet.AddRowBrake(2);   // a page starts at the third line
+	sheet.AddRowBrake(2);   // a page starts at the third line; the sheet's end stood on the last
 
 	std::ostringstream out(std::ios::binary);
 	ASSERT_TRUE(ibSheetFormatXlsx().Write(out, sheet));

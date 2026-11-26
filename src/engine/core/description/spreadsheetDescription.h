@@ -1030,10 +1030,23 @@ struct ibSpreadsheetDescription {
 	//
 	//support printing 
 	// ⭐ A BREAK r: A PAGE STARTS AT ROW r (Max, 2026-11-26) — the printout, the PDF, the grid's dashed line above r.
-	// The list's MAXIMUM is the sheet's end instead, its last row (SetRowBrake). A break is there or not: added twice
-	// it is one, as the grid's.
-	void AddRowBrake(int row) { if (!IsRowBrake(row)) m_rowBrakeAt.emplace_back(row); }
-	void AddColBrake(int col) { if (!IsColBrake(col)) m_colBrakeAt.emplace_back(col); }
+	// The list's MAXIMUM is the sheet's end instead, its last row (SetRowBrake), and it is stood there first when it
+	// is not: on a sheet with no breaks the first one became the end and started no page, so every caller had to
+	// stand the end itself before adding (Max: "that is not obvious"). At the end or past it no page starts — there
+	// is the end. A break is there or not: added twice it is one, as the grid's.
+	void AddRowBrake(int row) {
+		if (GetNumberRows() > 0 && (m_rowBrakeAt.empty() || GetMaxRowBrake() < GetNumberRows() - 1))
+			SetRowBrake(GetNumberRows() - 1);
+		if (row < GetMaxRowBrake() && !IsRowBrake(row))
+			m_rowBrakeAt.emplace_back(row);
+	}
+
+	void AddColBrake(int col) {
+		if (GetNumberCols() > 0 && (m_colBrakeAt.empty() || GetMaxColBrake() < GetNumberCols() - 1))
+			SetColBrake(GetNumberCols() - 1);
+		if (col < GetMaxColBrake() && !IsColBrake(col))
+			m_colBrakeAt.emplace_back(col);
+	}
 
 	void DeleteRowBrake(int row) { std::erase(m_rowBrakeAt, row); }
 	void DeleteColBrake(int col) { std::erase(m_colBrakeAt, col); }

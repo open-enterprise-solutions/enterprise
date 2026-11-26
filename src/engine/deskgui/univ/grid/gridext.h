@@ -2997,6 +2997,12 @@ protected:
 	// the sheet before the first paint (ibGridEditor). The grid itself sizes nothing here.
 	virtual void FitAutoRowHeights(int WXUNUSED(fromRow), int WXUNUSED(toRow)) {}
 
+	// WHERE THE SHEET'S CONTENT ENDS — the last row (column) that holds anything, which a page break stands the sheet's
+	// end on (AddRowBrake). The grid knows its table, rows added to fill the window included; whoever shows a document
+	// answers by the document (ibGridEditor).
+	virtual int GetLastContentRow() const { return m_table != nullptr ? m_table->GetRowsCount() - 1 : -1; }
+	virtual int GetLastContentCol() const { return m_table != nullptr ? m_table->GetColsCount() - 1 : -1; }
+
 	bool m_created;
 
 	ibGridWindow* m_gridWin;

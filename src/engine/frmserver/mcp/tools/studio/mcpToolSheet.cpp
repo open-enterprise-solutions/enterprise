@@ -1612,8 +1612,9 @@ public:
 			//
 			// 🛑 SO A BREAK MUST NOT BE THE LAST ONE. Placed on a template that carried no breaks at all,
 			// the first one a caller asks for BECAME that end: it printed as nothing, and the verb read
-			// as broken (a blank whose table was to start a page of its own, 2026-09-22). The end is
-			// stamped at the sheet's last line first, so what is added after it is a break and is taken.
+			// as broken (a blank whose table was to start a page of its own, 2026-09-22). AddRowBrake
+			// stands the end on the sheet's last line itself now, so what it adds is a break and is taken;
+			// one at that line or past it is refused here in words, rather than added as nothing.
 			const std::int32_t last = (columns ? desc.GetNumberCols() : desc.GetNumberRows()) - 1;
 
 			if (remove) {
@@ -1629,8 +1630,8 @@ public:
 				return false;
 			}
 			else {
-				if (columns) { desc.SetColBrake(last); desc.AddColBrake(at); }
-				else         { desc.SetRowBrake(last); desc.AddRowBrake(at); }
+				if (columns) desc.AddColBrake(at);
+				else         desc.AddRowBrake(at);
 			}
 
 			result.SetValue(ibT("what"), ibString(ibT("break")));

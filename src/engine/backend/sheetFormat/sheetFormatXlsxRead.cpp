@@ -581,8 +581,8 @@ int ReadSheet(const ibMemoryBuffer& bytes, const ibString& source, const std::ve
 		// ⭐ A BREAK IS A FACT ABOUT THE DOCUMENT, and it was travelling one way only: written into
 		// every workbook we save and read back out of none of them, so a file saved with its pages
 		// laid out came home flat. `id` is the index of the first line of the NEW page, and so is
-		// ours (Max, 2026-11-26) — taken as it is; the sheet's end is stood above them once every
-		// sheet is read (ibSheetFormatXlsx::Read).
+		// ours (Max, 2026-11-26) — taken as it is. The sheet's rows are read by now (the breaks
+		// follow sheetData), and AddRowBrake stands the sheet's end on the last of them.
 		if (node->GetName() == ibT("rowBreaks") || node->GetName() == ibT("colBreaks")) {
 			const bool rows = node->GetName() == ibT("rowBreaks");
 
@@ -808,21 +808,16 @@ bool ibSheetFormatXlsx::Read(std::istream& input, ibSpreadsheetDescription& shee
 		if (part == parts.end())
 			continue;
 
-		// ⭐ A PAGE STARTS WITH EVERY SHEET BUT THE FIRST — that is what makes the
-		// workbook's tabs into this document's pages.
-		if (at > 0 && topRow > 0)
-			read.AddRowBrake(topRow);
-
+		const int top = topRow;
 		const int used = ReadSheet(part->second, part->first, strings, styles, read, topRow, parsed);
 		topRow += std::max(used, 1);
-	}
 
-	// ⭐ AND THE SHEET'S END ABOVE THE BREAKS READ: it is the list's maximum, the last row — without it the last
-	// break read was taken for the end, and its page was not started.
-	if (read.GetBrakeNumberRows() > 0)
-		read.AddRowBrake(read.GetNumberRows() - 1);
-	if (read.GetBrakeNumberCols() > 0)
-		read.AddColBrake(read.GetNumberCols() - 1);
+		// ⭐ A PAGE STARTS WITH EVERY SHEET BUT THE FIRST — that is what makes the
+		// workbook's tabs into this document's pages. Placed once the sheet is read, so the
+		// sheet's end stands below it (AddRowBrake): placed before, it was the end.
+		if (at > 0 && top > 0)
+			read.AddRowBrake(top);
+	}
 
 	// ⚠ MOVED, NOT COPIED: a copy's cell makes a font of its own (ibSpreadsheetCellDescription::SetCell) — a GDI font,
 	// where this reading shares one of a style's among all its cells. A sheet of 46 thousand cells copied ran the

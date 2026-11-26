@@ -374,14 +374,13 @@ TEST(SheetFormatPdf, AWideSheetIsCutIntoBandsOfColumnsLeftToRight)
 	EXPECT_EQ(reader.Text(pages[1]), ibString(ibT("C9\nC10\nC11\nC12\nC13\nC14")));
 }
 
-// The largest break is where the sheet ends, not a break; one above it is taken.
+// A page starts at a break; the largest is where the sheet ends, which AddRowBrake stood on the last row itself.
 TEST(SheetFormatPdf, ABreakTheSheetAsksForStartsAPage)
 {
 	ibSpreadsheetDescription sheet;
 	for (int row = 0; row < 10; ++row)
 		sheet.SetCellValue(row, 0, ibString::Format(ibT("Row %d"), row));
 	sheet.AddRowBrake(5);
-	sheet.AddRowBrake(9);
 
 	PdfReader reader(Written(sheet));
 	ASSERT_TRUE(reader.Read());

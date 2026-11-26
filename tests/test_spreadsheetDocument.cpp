@@ -522,15 +522,18 @@ TEST(SpreadsheetDocument, PutArea_KeepsThePageBreakAskedWhereItStarts)
 	EXPECT_EQ(2, doc->GetSpreadsheetDesc().GetBrakeNumberRows());
 }
 
-// …and a break is there or not: added twice — the grid hands back the one the document told it — it is one.
-TEST(SpreadsheetDocument, AddRowBrake_TwiceIsOneBreak)
+// ONE VERB PLACES A PAGE (Max, 2026-11-26: "that is not obvious"). On a sheet with no breaks the first one added
+// became the sheet's end and started no page, so every caller stood the end itself first. AddRowBrake does it now;
+// and a break is there or not: added twice — the grid hands back the one the document told it — it is one.
+TEST(SpreadsheetDocument, AddRowBrake_StandsTheSheetsEndFirst)
 {
 	auto doc = MakeDocument();
 	doc->SetCellValue(5, 0, wxT("x"));
-	doc->SetRowBrake(5);
 	doc->AddRowBrake(3);
 	doc->AddRowBrake(3);
 
+	EXPECT_TRUE(doc->IsRowBrake(3));
+	EXPECT_EQ(5, doc->GetMaxRowBrake());   // the end, on the last row
 	EXPECT_EQ(2, doc->GetSpreadsheetDesc().GetBrakeNumberRows());
 	doc->DeleteRowBrake(3);
 	EXPECT_FALSE(doc->IsRowBrake(3));
@@ -1267,12 +1270,13 @@ TEST(SpreadsheetDocument, GetArea_AndGetAreaByName_DescribeTheSameBandIdenticall
 //
 //  🛑 THESE TESTS STATE WHAT THE CODE DOES, not what the names suggest. A change
 //  made on a reading of the name alone nearly shipped on 2026-08-31, so the
-//  behaviour is written down plainly: SetRowBrake is an EXTENT MARKER — it
-//  OVERWRITES the list's maximum element (or appends when the list is empty),
-//  the value it writes is derived from the list's LAST element clamped to the
-//  sheet's last line, and the argument only RAISES that value. It is what
-//  GetArea / GetAreaByName call to stamp a fragment's own edge; it is not a way
-//  to place a page break at a given line — AddRowBrake is.
+//  behaviour is written down plainly. SetRowBrake moves the sheet's END — the
+//  list's maximum, overwritten (appended when the list is empty), clamped to the
+//  sheet's last line and raised by the argument; GetArea / GetAreaByName stamp a
+//  fragment's own edge with it. AddRowBrake starts a PAGE at a line (2026-11-26):
+//  it stands the end on the sheet's last line first, and adds the line only
+//  above the end. Until 2026-11-26 Set clamped by the list's LAST entry, not its
+//  maximum, and wiped out a break a person had placed.
 // ---------------------------------------------------------------------------
 
 TEST(SpreadsheetDescription, SetRowBrake_OnAnEmptyList_AppendsTheGivenRow)
@@ -1307,20 +1311,20 @@ TEST(SpreadsheetDescription, AddRowBrake_AndSetRowBrake_AreDifferentVerbs)
 
 	desc.AddRowBrake(2);
 	desc.AddRowBrake(6);
-	EXPECT_EQ(2, desc.GetBrakeNumberRows());   // Add PLACES a break
+	EXPECT_EQ(3, desc.GetBrakeNumberRows());   // Add PLACES a page — and stood the end first
+	EXPECT_EQ(9, desc.GetMaxRowBrake());       // …on the last written line
 
 	desc.SetRowBrake(8);
-	EXPECT_EQ(2, desc.GetBrakeNumberRows());   // Set never places one
+	EXPECT_EQ(3, desc.GetBrakeNumberRows());   // Set never places one
 
-	EXPECT_TRUE(desc.IsRowBrake(2));           // the lower break is untouched…
-	EXPECT_FALSE(desc.IsRowBrake(6));          // …the highest one was rewritten
-	EXPECT_TRUE(desc.IsRowBrake(8));
+	EXPECT_TRUE(desc.IsRowBrake(2));           // the pages are untouched…
+	EXPECT_TRUE(desc.IsRowBrake(6));
+	EXPECT_EQ(9, desc.GetMaxRowBrake());       // …and the end, raised by 8, stays on the last line
 }
 
-// ⚠ IT CAN DESTROY A BREAK A PERSON PLACED, and it does not necessarily write the
-// line it was handed: the value comes from the list's LAST entry, the argument
-// only raises it, and it lands on the MAXIMUM entry wherever that sits.
-TEST(SpreadsheetDescription, SetRowBrake_WhenTheMaximumIsNotTheLastEntry_DropsThatBreakAndIgnoresItsArgument)
+// A BREAK A PERSON PLACED SURVIVES THE END MOVING (2026-11-26). Set clamped the value from the list's LAST entry
+// and wrote it over the MAXIMUM: with a page at 8 added before one at 3, it wrote 3 over the 8 — the page was gone.
+TEST(SpreadsheetDescription, SetRowBrake_MovesTheEndAndLeavesThePagesAlone)
 {
 	auto doc = MakeSheetOfRows(10);
 	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
@@ -1330,31 +1334,35 @@ TEST(SpreadsheetDescription, SetRowBrake_WhenTheMaximumIsNotTheLastEntry_DropsTh
 
 	desc.SetRowBrake(1);
 
-	EXPECT_EQ(2, desc.GetBrakeNumberRows());
-	EXPECT_FALSE(desc.IsRowBrake(8));   // the page break a person put at row 8 — gone
-	EXPECT_FALSE(desc.IsRowBrake(1));   // …and row 1, the argument, was never written
+	EXPECT_EQ(3, desc.GetBrakeNumberRows());
+	EXPECT_TRUE(desc.IsRowBrake(8));    // the page a person put at row 8 — still there
 	EXPECT_TRUE(desc.IsRowBrake(3));
-	EXPECT_EQ(3, desc.GetMaxRowBrake());
+	EXPECT_FALSE(desc.IsRowBrake(1));   // the end is raised by the argument, never lowered by it
+	EXPECT_EQ(9, desc.GetMaxRowBrake());
 }
 
-// …and it is an EXTENT marker: a break beyond the last written line is pulled
-// back to it. That is the verb's actual job.
-TEST(SpreadsheetDescription, SetRowBrake_WithABreakPastTheContent_ClampsItToTheLastWrittenRow)
+// No page starts at the end or past it: there is the end. And an end stood past the content (PutHorizontalPageBreak
+// stands it on the row the next area starts at) is pulled back to the last written line when it moves.
+TEST(SpreadsheetDescription, AddRowBrake_AtOrPastTheEnd_StartsNoPage)
 {
 	auto doc = MakeSheetOfRows(5);
 	ibSpreadsheetDescription& desc = doc->GetSpreadsheetDesc();
 	ASSERT_EQ(5, desc.GetNumberRows());
 
 	desc.AddRowBrake(9);      // beyond anything written
-	desc.SetRowBrake(0);
+	desc.AddRowBrake(4);      // the last written line
 
 	EXPECT_EQ(1, desc.GetBrakeNumberRows());
 	EXPECT_FALSE(desc.IsRowBrake(9));
-	EXPECT_TRUE(desc.IsRowBrake(4));   // the last written row
-	EXPECT_EQ(4, desc.GetMaxRowBrake());
+	EXPECT_EQ(4, desc.GetMaxRowBrake());   // only the end, stood on the last line
+
+	desc.SetRowBrake(7);
+	EXPECT_EQ(7, desc.GetMaxRowBrake());
+	desc.SetRowBrake(0);
+	EXPECT_EQ(4, desc.GetMaxRowBrake());   // clamped back to the last written line
 }
 
-// The column twin, same shape and the same two facts in one go.
+// The column twin, same shape and the same facts in one go.
 TEST(SpreadsheetDescription, SetColBrake_OverwritesTheMaximumAndClampsToTheContent)
 {
 	auto doc = MakeDocument();
@@ -1368,12 +1376,14 @@ TEST(SpreadsheetDescription, SetColBrake_OverwritesTheMaximumAndClampsToTheConte
 	EXPECT_EQ(1, desc.GetBrakeNumberCols());
 	EXPECT_TRUE(desc.IsColBrake(2));
 
-	desc.AddColBrake(9);
+	desc.AddColBrake(1);   // a page: the end is stood on the last column first
+	desc.AddColBrake(9);   // past the end: nothing
 	desc.SetColBrake(0);
 
 	EXPECT_EQ(2, desc.GetBrakeNumberCols());
-	EXPECT_FALSE(desc.IsColBrake(9));   // clamped back to the last written column
-	EXPECT_TRUE(desc.IsColBrake(2));    // the other entry is untouched
+	EXPECT_TRUE(desc.IsColBrake(1));
+	EXPECT_FALSE(desc.IsColBrake(2));   // the end moved off it
+	EXPECT_FALSE(desc.IsColBrake(9));
 	EXPECT_EQ(4, desc.GetMaxColBrake());
 }
 

@@ -429,22 +429,10 @@ void ibGridEditorPrintout::OnPreparePrinting()
 		heightCount += size;
 	}
 
-	// ⭐ THE PAGES WORKED OUT HERE ARE THE DOCUMENT'S BREAKS (Max, 2026-11-26): a page starts at each, the grid draws a
-	// dashed line above it, and the document keeps it — the next printout starts its pages where this one did. Each
-	// stands above the sheet's end, which is stood on the last row walked first: a break past the end would be the end.
-	if (m_rowsPerPage.GetCount() > 1) {
-		m_doc->SetRowBrake(m_doc->GetNumberRows() - 1);
-		for (size_t page = 1; page < m_rowsPerPage.GetCount(); page++)
-			if (m_rowsPerPage[page] < m_doc->GetMaxRowBrake())
-				m_doc->AddRowBrake(m_rowsPerPage[page]);
-	}
-
-	if (m_colsPerPage.GetCount() > 1) {
-		m_doc->SetColBrake(m_doc->GetNumberCols() - 1);
-		for (size_t page = 1; page < m_colsPerPage.GetCount(); page++)
-			if (m_colsPerPage[page] < m_doc->GetMaxColBrake())
-				m_doc->AddColBrake(m_colsPerPage[page]);
-	}
+	// 🛑 THE PAGES WORKED OUT HERE ARE NOT WRITTEN INTO THE DOCUMENT. They were for a day (2026-11-26), to show on the
+	// sheet where its pages end — and a page worked out for one setup was asked as a break by the next: a wide report
+	// previewed as it is was cut into two bands, and fitted to the page's width then printed the first band alone on a
+	// page of its own (Max: "it all fitted on one page before"). The pages are the paper's; the breaks are somebody's.
 
 	m_maxPage = m_rowsPerPage.GetCount() * m_colsPerPage.GetCount();
 }

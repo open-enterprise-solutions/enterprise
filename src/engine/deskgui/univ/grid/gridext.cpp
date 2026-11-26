@@ -11764,10 +11764,16 @@ bool ibGrid::MakeColAreaLabel(ibGridCellArea* colArea)
 	return false;
 }
 
+// ⭐ A PAGE STARTS AT THE ROW, ABOVE THE SHEET'S END — which is stood on the last row of the content first when it is
+// not there, as the document's (ibSpreadsheetDescription::AddRowBrake): on a sheet with no breaks the first one became
+// the end, and every caller stood the end itself before adding. At the end or past it no page starts.
 void ibGrid::AddRowBrake(int row)
 {
-	int index = m_rowBrakeAt.Index(row);
-	if (index != -1)
+	const int last = GetLastContentRow();
+	if (last >= 0 && (m_rowBrakeAt.IsEmpty() || GetMaxRowBrake() < last))
+		SetRowBrake(last);
+
+	if (row >= GetMaxRowBrake() || m_rowBrakeAt.Index(row) != wxNOT_FOUND)
 		return;
 
 	m_rowBrakeAt.Add(row);
@@ -11808,8 +11814,11 @@ void ibGrid::SetRowBrake(int row)
 
 void ibGrid::AddColBrake(int col)
 {
-	int index = m_colBrakeAt.Index(col);
-	if (index != -1)
+	const int last = GetLastContentCol();   // the end first — as a row's
+	if (last >= 0 && (m_colBrakeAt.IsEmpty() || GetMaxColBrake() < last))
+		SetColBrake(last);
+
+	if (col >= GetMaxColBrake() || m_colBrakeAt.Index(col) != wxNOT_FOUND)
 		return;
 
 	m_colBrakeAt.Add(col);

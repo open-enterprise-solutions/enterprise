@@ -508,6 +508,8 @@ public:
 
 	class ibGridEditorPrintout* CreatePrintout() const;
 
+protected:
+
 	// ⭐⭐ WHERE THE SHEET'S CONTENT ENDS — the last row (column) that holds anything.
 	//
 	// 🛑 THE ENDLESS SHEET MUST NOT EAT DATA. Scrolling down grows the sheet and
@@ -518,11 +520,10 @@ public:
 	// what a person's file brought may not.
 	//
 	// The DOCUMENT answers it: its cells end where its description does — a cell holding a border
-	// and no text is the document's too.
-	int GetLastContentRow() const;
-	int GetLastContentCol() const;
-
-protected:
+	// and no text is the document's too. The grid stands the sheet's end on it when a page break is
+	// added (ibGrid::AddRowBrake).
+	virtual int GetLastContentRow() const override;
+	virtual int GetLastContentCol() const override;
 
 	// ⭐ AUTOMATIC ROW HEIGHT, APPLIED WHEN THE ROWS ARE SHOWN — the rows without a height of their own, sized to their
 	// text (ibSpreadsheetRowHeight) from the document this editor shows, each once until it is marked again
