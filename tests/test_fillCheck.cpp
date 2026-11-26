@@ -44,7 +44,7 @@ struct FillCheck : ::testing::Test {
 	ibValueMetaObjectAttribute* capacity   = nullptr;   // required column
 
 	// The object is made inside a session (a harness's, unlisted), as the runtime makes one: made outside any, it falls
-	// over at its first check. A designer's - the tests' own sessions, the runtime's, are where it is edited and checked.
+	// over at its first check. A studio's - the tests' own sessions, the workspace's, are where it is edited and checked.
 	ibSessionHolder                       m_holder;
 	std::unique_ptr<ibSessionScope>       m_scope;
 
@@ -99,7 +99,7 @@ struct FillCheck : ::testing::Test {
 		ASSERT_TRUE(capacity->FillCheck());
 
 		m_holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(
-			std::make_shared<ibSession>(wxT("fill-check"), ibSessionKind::Designer));
+			std::make_shared<ibSession>(wxT("fill-check"), ibSessionKind::Studio));
 		ASSERT_NE(m_holder.Get(), nullptr);
 		m_scope = std::make_unique<ibSessionScope>(m_holder.Get());
 
