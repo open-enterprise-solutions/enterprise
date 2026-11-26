@@ -15,8 +15,8 @@ CI. Then **[writing-code.md](writing-code.md)**, how the code itself is written.
 | [public/](public/) | Design documents anyone may read — how a subsystem works, and why it is shaped that way |
 | [release-notes/](release-notes/) | What each release changed |
 
-Outside this folder: [the wiki](https://github.com/open-enterprise-solutions/enterprise/wiki)
-(the user's guide: installing, first steps, the studio, metadata, forms, the language),
+Outside this folder: [the user's guide](https://open-es.github.io/guide/)
+(installing, first steps, the studio, metadata, forms, the language — in English, Russian and Ukrainian),
 [README.md](../README.md) (what OES is, quick start, platforms, tests and CI),
 [CONTRIBUTING.md](../CONTRIBUTING.md) (what sending a pull request means),
 [SECURITY.md](../SECURITY.md) (reporting a vulnerability; what protects a base),

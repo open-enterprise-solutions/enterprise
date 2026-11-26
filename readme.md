@@ -36,16 +36,16 @@ road to beta: the database format may still change, and nothing migrates from 1.
 
 1. Download the [latest release](https://github.com/open-enterprise-solutions/enterprise/releases/latest):
    Windows x64 (`.zip`), Linux x64 (`.tar.gz`) or macOS arm64 (`.dmg`, unsigned — the
-   [installation page](https://github.com/open-enterprise-solutions/enterprise/wiki/Installation) says how to open it).
+   [installation page](https://open-es.github.io/guide/installation/) says how to open it).
 2. Unpack it and run `launcher`: **Add** a base, choose **File (local database)**, then press **Studio (GUI)**
    (**Designer** in 2.0.0-preview.1).
-3. Follow [First steps](https://github.com/open-enterprise-solutions/enterprise/wiki/First-steps): a small stock
+3. Follow [First steps](https://open-es.github.io/guide/first-steps/): a small stock
    application, built in about fifteen minutes.
 
 Building from source is under [Quick Start](#quick-start).
 
-**New here?** The [wiki](https://github.com/open-enterprise-solutions/enterprise/wiki) is the
-user's guide: installing a build, a first application step by step, the studio, the metadata
+**New here?** The [user's guide](https://open-es.github.io/guide/), in English, Russian and
+Ukrainian: installing a build, a first application step by step, the studio, the metadata
 tree, forms, the language, queries and reports, and the pitfalls.
 
 ---
@@ -92,7 +92,7 @@ var table = q.Execute().Unload();   // a value table
 ```
 
 The tables behind `Goods` and `Stock`, the form a person fills in and the list of documents come from the
-metadata — no SQL and no window code are written. [First steps](https://github.com/open-enterprise-solutions/enterprise/wiki/First-steps)
+metadata — no SQL and no window code are written. [First steps](https://open-es.github.io/guide/first-steps/)
 builds this application from an empty base.
 
 ---
@@ -378,7 +378,7 @@ for all three platforms whenever it changed.
 
 | Where | What it holds |
 |---|---|
-| [The wiki](https://github.com/open-enterprise-solutions/enterprise/wiki) | The user's guide: installing, first steps, the studio, metadata, forms, the language, queries and reports, the application server, pitfalls |
+| [The user's guide](https://open-es.github.io/guide/) | Installing, first steps, the studio, metadata, forms, the language, queries and reports, the application server, pitfalls — in English, Russian and Ukrainian |
 | [docs/public/](docs/public/README.md) | Design documents: how a subsystem works, what it guarantees and where it stops — the query language, registers, access rights, reports, jobs, record locks, numbers and dates, the client protocol, the cluster |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The system, directory by directory |
 | [docs/BUILD.md](docs/BUILD.md) | Building on every platform, the drivers, the third-party components and their versions |
