@@ -141,6 +141,7 @@ protected:
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_NONE; }
 
     void OnPaint(wxPaintEvent& event);
+    void OnCaptureLost(wxMouseCaptureLostEvent& event);
 
     // forces update of thumb's visual appearance (does nothing if m_dirty=false)
     void UpdateThumb();
@@ -235,6 +236,11 @@ public:
     virtual bool OnScrollTimer(ibScrollBar *scrollbar,
                                const ibControlAction& action);
 
+    // stop what a press on the scrollbar started - its capture, its timer: the button went up, or the
+    // scrollbar lost the mouse or is being destroyed (ibScrollBar's OnCaptureLost and destructor). The
+    // handler is every scrollbar's and holds one at a time: for another one it does nothing
+    void StopScrolling(ibScrollBar *scrollbar);
+
 protected:
     // return true if the mouse button can be used to activate scrollbar, false
     // if not (any button under GTK+ unlike left button only which is default)
@@ -252,9 +258,6 @@ protected:
     // [un]press the scrollbar element corresponding to m_htLast
     virtual void Press(ibScrollBar *scrollbar, bool doIt)
         { SetElementState(scrollbar, wxCONTROL_PRESSED, doIt); }
-
-    // stop scrolling because we reached the end point
-    void StopScrolling(ibScrollBar *scrollbar);
 
     // get the mouse coordinates in the scrollbar direction from the event
     wxCoord GetMouseCoord(const ibScrollBar *scrollbar,

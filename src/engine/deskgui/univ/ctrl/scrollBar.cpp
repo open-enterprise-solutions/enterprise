@@ -70,6 +70,7 @@ private:
 
 wxBEGIN_EVENT_TABLE(ibScrollBar, ibControl)
     EVT_PAINT(ibScrollBar::OnPaint)
+    EVT_MOUSE_CAPTURE_LOST(ibScrollBar::OnCaptureLost)
 wxEND_EVENT_TABLE()
 
 // ----------------------------------------------------------------------------
@@ -153,6 +154,11 @@ bool ibScrollBar::Create(wxWindow *parent,
 
 ibScrollBar::~ibScrollBar()
 {
+    // The scrollbars share one input handler, and it holds the one pressed: the mouse it captured and the
+    // timer that pages or steps while the button is down. Destroyed under the button, the scrollbar takes
+    // both with it - left with the handler, the timer fired at the freed scrollbar (a dump of 2026-11-27).
+    if ( ibStdScrollBarInputHandler* const handler = dynamic_cast<ibStdScrollBarInputHandler*>(GetInputHandler()) )
+        handler->StopScrolling(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -728,6 +734,15 @@ void ibScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event))
     m_thumbPosOld = -1;
 }
 
+// The mouse taken away while a part of the scrollbar is held: what the button's release would have stopped
+// stops now. Otherwise the handler keeps this scrollbar as the pressed one, its timer goes on, and no other
+// scrollbar answers a press.
+void ibScrollBar::OnCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event))
+{
+    if ( ibStdScrollBarInputHandler* const handler = dynamic_cast<ibStdScrollBarInputHandler*>(GetInputHandler()) )
+        handler->StopScrolling(this);
+}
+
 // ----------------------------------------------------------------------------
 // state flags
 // ----------------------------------------------------------------------------
@@ -996,12 +1011,14 @@ bool ibStdScrollBarInputHandler::OnScrollTimer(ibScrollBar *scrollbar,
 
 void ibStdScrollBarInputHandler::StopScrolling(ibScrollBar *control)
 {
-    // return everything to the normal state
-    if ( m_winCapture )
-    {
+    // one scrollbar at a time is held: another one has nothing to stop here
+    if ( m_winCapture != control )
+        return;
+
+    // return everything to the normal state; a capture already taken away is not released again
+    if ( m_winCapture->HasCapture() )
         m_winCapture->ReleaseMouse();
-        m_winCapture = nullptr;
-    }
+    m_winCapture = nullptr;
 
     m_btnCapture = -1;
 
