@@ -15,7 +15,8 @@ HYPERLINK = 1
 EXPAND = 0x2000
 # A layout's View (ibProtocol::ibForm::ibProperty::ibLayoutView): cells of one size.
 GRID = 2
-PRESS = 3
+# The events a button sends (ibProtocol::ibEvent::ibKind): a command of its group picked by its Id, a plain press.
+COMMAND, PRESS = 2, 3
 
 
 def png():
@@ -34,7 +35,7 @@ def placed(control):
 def button(button_id, caption, location, note=None, picture=None, members=None, view=None):
     state = {'Caption': caption, 'Representation': BOTH, 'Visible': True, 'Enabled': True}
     if members is not None:
-        state['Members'] = {'NodeChildren': [{'Caption': name, 'Member': place} for place, name in enumerate(members)]}
+        state['Members'] = {'NodeChildren': [{'Caption': name, 'Id': place} for place, name in enumerate(members)]}
     if note is not None:
         state['Note'] = note
     if picture is not None:
@@ -127,10 +128,10 @@ class AGroupTile(PageTest):
         page = self.start(self.scenario())
         page.locator('oes-button.tile wa-dropdown wa-button').first.click()
         page.locator('wa-dropdown-item', has_text='Coffee').click()
-        page.wait_for_function('window.fake.events(3).length === 1')
-        press = self.sent(PRESS)[0]
-        self.assertEqual(press['Control'], 710)
-        self.assertEqual(press['Args']['Member'], 1)
+        page.wait_for_function('window.fake.events(2).length === 1')
+        picked = self.sent(COMMAND)[0]
+        self.assertEqual(picked['Control'], 710)
+        self.assertEqual(picked['Args']['Id'], 1)
 
 
 class AHyperlink(PageTest):
