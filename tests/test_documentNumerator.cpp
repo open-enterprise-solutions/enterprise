@@ -10,8 +10,7 @@
 
 #include <set>
 
-#include <wx/filename.h>
-#include <wx/init.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
@@ -30,6 +29,11 @@
 #include "backend/query/provider/database/columnCodec.h"
 #include "backend/query/queryProvider.h"
 #include "core/serialize/dataBuilder.h"
+
+// After the engine's headers: on Windows these bring windows.h, whose GetForm macro would rename
+// ibValueRecordDataObject::GetForm in them (GetFormW, unresolved at link).
+#include <wx/filename.h>
+#include <wx/init.h>
 
 namespace {
 
