@@ -20,7 +20,7 @@ bool ibPropertyPredefinedType::ReadNodeValue(const ibDataValue& value)
 	if (!ibPropertyPredefined<>::ReadNodeValue(value))
 		return false;
 	if (chosen.GetClsidCount() == 1)
-		GetMetaObject()->GetTypeDesc() = chosen;
+		GetMetaObject()->GetOwnTypeDesc() = chosen;
 	return true;
 }
 
@@ -29,7 +29,7 @@ bool ibPropertyPredefinedType::WriteNodeValue(ibDataValue& value) const
 	auto child = std::make_shared<ibDataNode>();
 	GetMetaObject()->SaveNode(*child);
 	ibDataValue type;
-	ibTypeDescriptionMemory::WriteNode(type, GetMetaObject()->GetTypeDesc());
+	ibTypeDescriptionMemory::WriteNode(type, GetMetaObject()->GetOwnTypeDesc());
 	if (const auto fields = type.AsChild())
 		for (const auto& field : fields->Fields())
 			child->SetField(field.first, field.second);
@@ -42,7 +42,7 @@ bool ibPropertyPredefinedType::GetProtocolValue(ibDataNode& row, ibReader reader
 	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 	// …read as the type's name, as a type property's row is: the holder itself has no value to say.
-	const ibTypeDescription& typeDesc = GetMetaObject()->GetTypeDesc();
+	const ibTypeDescription& typeDesc = GetMetaObject()->GetOwnTypeDesc();
 	if (const ibCtorAbstractType* const held = typeDesc.GetClsidCount() == 1 ? ibValue::GetAvailableCtor(typeDesc.GetFirstClsid()) : nullptr)
 		row.SetField(ibProtocol::ibSchema::ibProperties::Presentation, ibDataValue::String(held->GetClassName()));
 	row.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, false);

@@ -147,6 +147,8 @@ constexpr ibClassID g_metaSequenceCLSID = metadata_to_clsid("MD_SEQN");
 
 // DOCUMENT JOURNALS — one list over the documents of several kinds (partial/documentJournal.h)
 constexpr ibClassID g_metaDocumentJournalCLSID = metadata_to_clsid("MD_DJRN");
+// DOCUMENT NUMERATORS — one number series several document kinds take their numbers from (document-numerators.md)
+constexpr ibClassID g_metaDocumentNumeratorCLSID = metadata_to_clsid("MD_DNUM");
 
 // EXTERNAL
 constexpr ibClassID g_metaExternalDataToolCLSID = metadata_to_clsid("MD_EDTL");
@@ -606,6 +608,11 @@ public:
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags) { return true; }
 	virtual bool OnDeleteMetaObject();
+	// AN OBJECT OTHERS STAND ON REFUSES TO GO — asked by ibMetaData::RemoveMetaObject BEFORE anything is closed,
+	// so a refusal leaves the object exactly as it was. It raises (ibBackendCoreException) with a sentence that
+	// names the object and the first one that needs it; the studio's verb and MCP hand that sentence back.
+	// The default stands on nothing. (OnDeleteMetaObject is too late for it: the close phases have run.)
+	virtual void RefuseDelete() const {}
 	virtual bool OnRenameMetaObject(const ibString& sNewName) { return true; }
 
 	//for studio 

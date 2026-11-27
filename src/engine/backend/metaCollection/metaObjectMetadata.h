@@ -58,6 +58,7 @@ public:
 			clsid == g_metaConstantCLSID ||
 			clsid == g_metaCatalogCLSID ||
 			clsid == g_metaDocumentCLSID ||
+			clsid == g_metaDocumentNumeratorCLSID ||
 			clsid == g_metaEnumerationCLSID ||
 			clsid == g_metaDataToolCLSID ||
 			clsid == g_metaReportCLSID ||

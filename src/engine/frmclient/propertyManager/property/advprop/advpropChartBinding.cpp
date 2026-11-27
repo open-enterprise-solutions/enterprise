@@ -32,7 +32,7 @@ public:
 		for (const wxChar* className : {
 				wxT("ibPropertyChartOfAccounts"), wxT("ibPropertyChartOfCharacteristicTypes"),
 				wxT("ibPropertyChartOfCalculationTypes"), wxT("ibPropertyAccountingKind"),
-				wxT("ibPropertyFeatureOptions") })
+				wxT("ibPropertyFeatureOptions"), wxT("ibPropertyMetaObjectChoice") })
 			ibPropertyRegistry::Register(className, maker);
 	}
 } g_chartBindingLoader;

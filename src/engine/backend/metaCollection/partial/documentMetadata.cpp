@@ -137,6 +137,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetSelectForm(const ibF
 bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyNumberPeriodicity->GetName(), m_propertyNumberPeriodicity->GetNodeValue());
+	node.SetProperty(m_propertyNumerator->GetName(), m_propertyNumerator->GetNodeValue());
 	node.SetProperty(m_propertyAttributePosted->GetName(), m_propertyAttributePosted->GetNodeValue());
 
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
@@ -153,6 +154,8 @@ bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 {
 	// The number, the same way every other enumeration is stored. Absent: the default stands.
 	m_propertyNumberPeriodicity->SetNodeValue(node.GetProperty(m_propertyNumberPeriodicity->GetName()));
+	// …and the numerator. Absent from a configuration saved before numerators existed: none, a series of its own.
+	m_propertyNumerator->SetNodeValue(node.GetProperty(m_propertyNumerator->GetName()));
 
 	m_propertyAttributePosted->SetNodeValue(node.GetProperty(m_propertyAttributePosted->GetName()));
 
@@ -268,6 +271,9 @@ bool ibValueMetaObjectDocument::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectDocument::OnAfterRunMetaObject(int flags)
 {
+	// Every object is loaded by now, the numerator too, whichever came first in the file.
+	RestateNumerator();
+
 	if (!(*m_propertyAttributePosted)->OnAfterRunMetaObject(flags))
 		return false;
 
@@ -292,6 +298,9 @@ bool ibValueMetaObjectDocument::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectDocument::OnBeforeCloseMetaObject()
 {
+	// The Number answers its own type again: what it was handed belongs to a configuration that is closing.
+	GetDocumentNumber()->SetOwnerTypeSource(nullptr);
+
 	if (!(*m_propertyAttributePosted)->OnBeforeCloseMetaObject())
 		return false;
 

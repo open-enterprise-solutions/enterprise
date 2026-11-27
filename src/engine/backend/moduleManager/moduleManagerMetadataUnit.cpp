@@ -42,6 +42,7 @@ constexpr ibMetadataKind s_metadataKinds[] = {
 	{ ibT("Catalogs"),                    g_metaCatalogCLSID },
 	{ ibT("Documents"),                   g_metaDocumentCLSID },
 	{ ibT("DocumentJournals"),            g_metaDocumentJournalCLSID },
+	{ ibT("DocumentNumerators"),          g_metaDocumentNumeratorCLSID },
 	{ ibT("Enumerations"),                g_metaEnumerationCLSID },
 	{ ibT("DataTools"),                   g_metaDataToolCLSID },
 	{ ibT("Reports"),                     g_metaReportCLSID },
