@@ -1069,6 +1069,8 @@ protected:
 
 	//create empty object
 	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = ibNullGuid) const = 0; //create object and read by guid — born owned
+	// The full-text index's build reads a stored record without running its module (ibFullTextIndex::IndexStoredRecord).
+	friend class ibFullTextIndex;
 
 protected:
 
@@ -2447,6 +2449,8 @@ protected:
 	virtual bool ReadData(const ibGuid& srcGuid);
 	virtual bool SaveData();
 	virtual bool DeleteData();
+	// The full-text index's build reads a stored record without running its module (ibFullTextIndex::IndexStoredRecord).
+	friend class ibFullTextIndex;
 
 	// WHICH SHAPE THIS RECORD IS. A plain reference object has only one, so it answers ITEM and
 	// every field applies to it; a hierarchical one answers what it actually is. A FACT about the

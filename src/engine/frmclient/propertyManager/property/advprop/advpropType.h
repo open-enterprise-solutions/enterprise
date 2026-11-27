@@ -23,8 +23,11 @@ public:
 	const std::vector<ibClassID>& GetTypeList() const { return m_listType; }
 	bool IsMultiple() const { return m_multiple; }
 
+	// `predefined`: the holder of a predefined attribute (a code, a description) - its node carries, beside the type,
+	// whether the full-text index holds the field, shown as one more row under a string type.
 	ibPGTypeProperty(const std::vector<ibClassID>& listType = std::vector<ibClassID>(), bool multiple = true,
-		const wxString& label = ibPG_LABEL, const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant());
+		const wxString& label = ibPG_LABEL, const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant(),
+		bool predefined = false);
 
 	virtual wxString ValueToString(ibVariant& value, ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override { return value.GetString(); }
 	virtual bool StringToValue(ibVariant& variant,
@@ -66,6 +69,7 @@ protected:
 	ibUIntProperty* m_length;
 	ibEnumProperty* m_allowedLength;
 	ibBoolProperty* m_unlimited;   // the length 0 (ibQualifierString): the length and the allowed length held
+	ibBoolProperty* m_fullTextSearch = nullptr;   // the predefined holder's only
 
 	std::map<int, ibClassID> m_valChoices;
 };
