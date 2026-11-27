@@ -195,6 +195,26 @@
       "reviewed": true
     },
     {
+      "id": "guide.givenReference",
+      "name_local": "Загрузка данных со своей идентичностью — новый объект под заданной ссылкой (GetRef, CreateItem(ref))",
+      "name_en": "Loading data that already has an identity — a new object under a given reference (GetRef, CreateItem(ref))",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "<Менеджер>.GetRef(<id>)    <Менеджер>.CreateItem(<ref>)",
+      "description": "ДАННЫЕ, КОТОРЫЕ ПРИХОДЯТ СО СВОИМИ ИДЕНТИФИКАТОРАМИ - загрузка из другой системы, обмен между двумя базами одного приложения, загрузка, которую запускают повторно, - сохраняют их. Иначе каждая строка получает здесь новую ссылку, и загружающий код вынужден вести таблицу «идентификатор там -> ссылка здесь» для каждого типа и переводить через неё каждый ссылочный реквизит.\n\nДВА ШАГА:\n- `<Менеджер>.GetRef(id)` - ссылка этого типа с заданным идентификатором (Guid или его текст). Из базы ничего не читается: объекта за ней может ещё не быть. Нулевой идентификатор даёт пустую ссылку. Ссылка возвращает свой идентификатор через `GetGuid()`.\n- создатель, которому передали эту ссылку, - `CreateItem(ref)`, `CreateFolder(ref)`, `CreateDocument(ref)`, `CreateAccount(ref)`, `CreateCalculationType(ref)` - делает обычный новый объект (`IsNew()` - Истина, его `Ref` пуст до записи, заполнение и обработчики записи работают как всегда), который `Write()` сохраняет под заданной ссылкой. После записи `Ref` равен этой ссылке.\n\nСсылочный реквизит заполняется так же, без таблицы соответствия: `item.Parent = Catalogs.Goods.GetRef(parentId)`.\n\nОТКАЗ создателя, с именем объекта:\n- значение, которое не является ссылкой типа этого менеджера, - ссылка другого справочника, идентификатор (нужен `GetRef`), что-либо ещё;\n- пустая ссылка;\n- ссылка, под которой объект уже существует. Чтобы изменить его, откройте его: `ref.GetObject()`.\n\nБез аргумента создатель работает как раньше, и новый объект получает собственную идентичность.",
+      "syntax_block": "var <ссылка> = Catalogs.<Имя>.GetRef(<id>);\nvar <элемент> = Catalogs.<Имя>.CreateItem(<ссылка>);\n<элемент>.Write();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// строка загрузки: её идентификатор, идентификатор её группы, её наименование\nvar ref = Catalogs.Goods.GetRef(row.Id);\nvar item = Catalogs.Goods.CreateItem(ref);\nitem.Description = row.Name;\nitem.Parent = Catalogs.Goods.GetRef(row.FolderId);\nitem.Write();\n// item.Ref == ref\n\n// документ - так же\nvar doc = Documents.Order.CreateDocument(Documents.Order.GetRef(row.Id));",
+      "availability": "Client, Server",
+      "see_also": [
+        "guide.ownedCatalogs"
+      ],
+      "reviewed": false
+    },
+    {
       "id": "guide.textFiles",
       "name_local": "Файлы — чтение и запись текста и байтов как есть (TextReader, TextWriter, BinaryData, TextEncoding)",
       "name_en": "Files — reading and writing text, and bytes as they are (TextReader, TextWriter, BinaryData, TextEncoding)",

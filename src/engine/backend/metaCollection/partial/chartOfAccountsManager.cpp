@@ -11,6 +11,7 @@
 const ibValueMetaObjectSharedModule* ibValueManagerDataObjectChartOfAccounts::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 #include "reference/reference.h"
+#include "backend/system/value/valueGuid.h"   // GuidOf - GetRef reads its identifier
 
 ibValueReferenceDataObject* ibValueManagerDataObjectChartOfAccounts::EmptyRef() const
 {
@@ -27,13 +28,14 @@ enum Func {
 	eGetListForm,
 	eGetSelectForm,
 	eGetTemplate,
-	eEmptyRef
+	eEmptyRef,
+	eGetRef
 };
 
 void ibValueManagerDataObjectChartOfAccounts::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(ibT("CreateAccount"), ibT("CreateAccount()"));
-	helper.AppendFunc(ibT("CreateFolder"), ibT("CreateFolder()"));
+	helper.AppendFunc(ibT("CreateAccount"), 1, ibT("CreateAccount(ref? : reference)"));
+	helper.AppendFunc(ibT("CreateFolder"), 1, ibT("CreateFolder(ref? : reference)"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("FindByCode"), 1, ibT("FindByCode(code : string)"));
 	helper.AppendFunc(ibT("FindByDescription"), 2, ibT("FindByDescription(descr : string, exact = true : boolean)"));
@@ -42,6 +44,7 @@ void ibValueManagerDataObjectChartOfAccounts::FillManagerMethods(ibMemberTable& 
 	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
 	helper.AppendFunc(ibT("EmptyRef"), ibT("EmptyRef()"));
+	helper.AppendFunc(ibT("GetRef"), 1, ibT("GetRef(id : guid)"));
 }
 
 #include "selector/objectSelector.h"
@@ -50,8 +53,8 @@ bool ibValueManagerDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, 
 {
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectChartOfAccounts::FillManagerMethods))
 	{
-	case eCreateAccount: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM); return true;
-	case eCreateFolder: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER); return true;
+	case eCreateAccount: pvarRetValue = m_metaObject->CreateNewObjectValue(ibObjectMode::OBJECT_ITEM, lSizeArray > 0 ? *paParams[0] : ibValue()); return true;
+	case eCreateFolder: pvarRetValue = m_metaObject->CreateNewObjectValue(ibObjectMode::OBJECT_FOLDER, lSizeArray > 0 ? *paParams[0] : ibValue()); return true;
 	case eSelect: pvarRetValue = new ibValueSelectorRecordDataObject(m_metaObject); return true;
 	case eFindByCode: pvarRetValue = FindByCode(*paParams[0]); return true;
 	case eFindByDescription: pvarRetValue = FindByDescription(*paParams[0], lSizeArray > 1 ? *paParams[1] : ibValue()); return true;
@@ -75,6 +78,7 @@ bool ibValueManagerDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, 
 	}
 	case eGetTemplate: pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString()); return true;
 	case eEmptyRef: pvarRetValue = EmptyRef(); return true;
+	case eGetRef: pvarRetValue = ibValueReferenceDataObject::Create(m_metaObject, GuidOf(*paParams[0])); return true;
 	}
 	return ibValueManagerDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }

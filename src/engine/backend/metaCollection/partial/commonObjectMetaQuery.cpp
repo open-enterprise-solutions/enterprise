@@ -96,6 +96,32 @@ bool ibValueMetaObjectRecordDataEnumRef::ResolveQueryConstant(const ibString& me
 	return false;
 }
 
+ibGuid ibValueMetaObjectRecordDataMutableRef::NewObjectIdentity(const ibValue& reference) const
+{
+	ibValueReferenceDataObject* given = nullptr;
+	if (!reference.ConvertToValue(given) || given == nullptr || given->GetMetaObjectRef() != this)
+		ibBackendCoreException::Error(_("'%s': a new object takes a reference of its own type, and '%s' is not one"),
+			GetSynonym(), reference.GetClassName());
+
+	if (given->IsEmptyRef())
+		ibBackendCoreException::Error(_("'%s': a new object cannot be created under an empty reference"), GetSynonym());
+
+	const ibGuid identity = given->GetGuid();
+
+	// Taken or free is a fact of the table, not of what this user may see: a row hidden from him is a taken
+	// reference all the same.
+	ibDataQueryBuilder taken;
+	taken.From(GetQueryable()).WhereKey(identity);
+	taken.WithAccessPolicy(nullptr);
+	ibReadPageRequest page;
+	page.m_count = 1;
+	if (taken.Execute(page).Next())
+		ibBackendCoreException::Error(_("'%s': an object with the reference %s already exists"),
+			GetSynonym(), identity.str());
+
+	return identity;
+}
+
 bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const ibString& member, ibValue& out) const
 {
 	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))

@@ -12,6 +12,7 @@
 const ibValueMetaObjectSharedModule* ibValueManagerDataObjectChartOfCalculationTypes::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 #include "reference/reference.h"
+#include "backend/system/value/valueGuid.h"   // GuidOf - GetRef reads its identifier
 
 ibValueReferenceDataObject* ibValueManagerDataObjectChartOfCalculationTypes::EmptyRef() const
 {
@@ -28,13 +29,14 @@ enum Func {
 	eGetListForm,
 	eGetSelectForm,
 	eGetTemplate,
-	eEmptyRef
+	eEmptyRef,
+	eGetRef
 };
 
 void ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(ibT("CreateCalculationType"), ibT("CreateCalculationType()"));
-	helper.AppendFunc(ibT("CreateFolder"), ibT("CreateFolder()"));
+	helper.AppendFunc(ibT("CreateCalculationType"), 1, ibT("CreateCalculationType(ref? : reference)"));
+	helper.AppendFunc(ibT("CreateFolder"), 1, ibT("CreateFolder(ref? : reference)"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("FindByCode"), 1, ibT("FindByCode(code : string)"));
 	helper.AppendFunc(ibT("FindByDescription"), 2, ibT("FindByDescription(descr : string, exact = true : boolean)"));
@@ -43,6 +45,7 @@ void ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods(ibMembe
 	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
 	helper.AppendFunc(ibT("EmptyRef"), ibT("EmptyRef()"));
+	helper.AppendFunc(ibT("GetRef"), 1, ibT("GetRef(id : guid)"));
 }
 
 #include "selector/objectSelector.h"
@@ -52,10 +55,10 @@ bool ibValueManagerDataObjectChartOfCalculationTypes::CallAsFunc(const long lMet
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods))
 	{
 	case eCreateCalculationType:
-		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM);
+		pvarRetValue = m_metaObject->CreateNewObjectValue(ibObjectMode::OBJECT_ITEM, lSizeArray > 0 ? *paParams[0] : ibValue());
 		return true;
 	case eCreateFolder:
-		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
+		pvarRetValue = m_metaObject->CreateNewObjectValue(ibObjectMode::OBJECT_FOLDER, lSizeArray > 0 ? *paParams[0] : ibValue());
 		return true;
 	case eSelect:
 		pvarRetValue = new ibValueSelectorRecordDataObject(m_metaObject);
@@ -89,6 +92,9 @@ bool ibValueManagerDataObjectChartOfCalculationTypes::CallAsFunc(const long lMet
 		return true;
 	case eEmptyRef:
 		pvarRetValue = EmptyRef();
+		return true;
+	case eGetRef:
+		pvarRetValue = ibValueReferenceDataObject::Create(m_metaObject, GuidOf(*paParams[0]));
 		return true;
 	}
 

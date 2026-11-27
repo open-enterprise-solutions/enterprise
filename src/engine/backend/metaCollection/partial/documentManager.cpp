@@ -15,6 +15,7 @@ const ibValueMetaObjectSharedModule* ibValueManagerDataObjectDocument::GetManage
 }
 
 #include "reference/reference.h"
+#include "backend/system/value/valueGuid.h"   // GuidOf - GetRef reads its identifier
 
 ibValueReferenceDataObject* ibValueManagerDataObjectDocument::EmptyRef()
 {
@@ -29,14 +30,15 @@ enum Func {
 	eGetListForm,
 	eGetSelectForm,
 	eGetTemplate,
-	eEmptyRef
+	eEmptyRef,
+	eGetRef
 };
 
 #include "backend/metaData.h"
 
 void ibValueManagerDataObjectDocument::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(ibT("CreateDocument"), ibT("CreateDocument()"));
+	helper.AppendFunc(ibT("CreateDocument"), 1, ibT("CreateDocument(ref? : reference)"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("FindByNumber"), 2, ibT("FindByNumber(number : string, date)"));
 	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(name : string, owner, id : guid)"));
@@ -44,6 +46,7 @@ void ibValueManagerDataObjectDocument::FillManagerMethods(ibMemberTable& helper)
 	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
 	helper.AppendFunc(ibT("EmptyRef"), ibT("EmptyRef()"));
+	helper.AppendFunc(ibT("GetRef"), 1, ibT("GetRef(id : guid)"));
 }
 
 #include "selector/objectSelector.h"
@@ -53,7 +56,7 @@ bool ibValueManagerDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectDocument::FillManagerMethods))
 	{
 	case eCreateDocument:
-		pvarRetValue = m_metaObject->CreateObjectValue();
+		pvarRetValue = m_metaObject->CreateNewObjectValue(lSizeArray > 0 ? *paParams[0] : ibValue());
 		return true;
 	case eSelect:
 		pvarRetValue = new ibValueSelectorRecordDataObject(m_metaObject);
@@ -91,6 +94,9 @@ bool ibValueManagerDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue
 		return true;
 	case eEmptyRef:
 		pvarRetValue = EmptyRef();
+		return true;
+	case eGetRef:
+		pvarRetValue = ibValueReferenceDataObject::Create(m_metaObject, GuidOf(*paParams[0]));
 		return true;
 	}
 

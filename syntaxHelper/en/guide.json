@@ -195,6 +195,26 @@
       "reviewed": true
     },
     {
+      "id": "guide.givenReference",
+      "name_local": "Loading data that already has an identity — a new object under a given reference (GetRef, CreateItem(ref))",
+      "name_en": "Loading data that already has an identity — a new object under a given reference (GetRef, CreateItem(ref))",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang"
+      ],
+      "signature": "<Manager>.GetRef(<id>)    <Manager>.CreateItem(<ref>)",
+      "description": "DATA THAT ARRIVES WITH ITS OWN IDENTIFIERS - a load from another system, an exchange between two bases of one application, a load that is run again - keeps them. Without that, every row gets a fresh reference here, and the loading code has to carry a table \"identifier there -> reference here\" for every type and translate each reference attribute through it.\n\nTWO STEPS:\n- `<Manager>.GetRef(id)` - the reference of this type with the given identifier (a Guid or its text). It reads nothing from the database: the object behind it may not exist yet. The nil identifier gives the empty reference. A reference gives its identifier back with `GetGuid()`.\n- a creator given that reference - `CreateItem(ref)`, `CreateFolder(ref)`, `CreateDocument(ref)`, `CreateAccount(ref)`, `CreateCalculationType(ref)` - makes an ordinary new object (`IsNew()` is True, its `Ref` is empty until written, filling and the write handlers run as always) that `Write()` stores under the reference given. After the write `Ref` is that reference.\n\nA reference attribute is then filled the same way, with no table between: `item.Parent = Catalogs.Goods.GetRef(parentId)`.\n\nREFUSED by the creator, with the object named:\n- a value that is not a reference of this manager's type - a reference of another catalog, an identifier (go through `GetRef`), anything else;\n- an empty reference;\n- a reference an object already exists under. To change that object, open it: `ref.GetObject()`.\n\nWithout the argument a creator works as before and the new object gets an identity of its own.",
+      "syntax_block": "var <ref> = Catalogs.<Name>.GetRef(<id>);\nvar <item> = Catalogs.<Name>.CreateItem(<ref>);\n<item>.Write();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// a row of the load: its identifier, its folder's identifier, its name\nvar ref = Catalogs.Goods.GetRef(row.Id);\nvar item = Catalogs.Goods.CreateItem(ref);\nitem.Description = row.Name;\nitem.Parent = Catalogs.Goods.GetRef(row.FolderId);\nitem.Write();\n// item.Ref == ref\n\n// a document, the same way\nvar doc = Documents.Order.CreateDocument(Documents.Order.GetRef(row.Id));",
+      "availability": "Client, Server",
+      "see_also": [
+        "guide.ownedCatalogs"
+      ],
+      "reviewed": false
+    },
+    {
       "id": "guide.textFiles",
       "name_local": "Files — reading and writing text, and bytes as they are (TextReader, TextWriter, BinaryData, TextEncoding)",
       "name_en": "Files — reading and writing text, and bytes as they are (TextReader, TextWriter, BinaryData, TextEncoding)",
