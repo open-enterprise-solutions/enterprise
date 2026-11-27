@@ -142,8 +142,7 @@ jobs:
       # libuuid's uuid_generate. Neither was in BUILD.md's apt list.
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          bash .github/install-packages.sh \
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
@@ -522,8 +521,7 @@ jobs:
       # the client library has to be present for the test to connect at all.
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          bash .github/install-packages.sh \
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev libpq-dev
 
@@ -595,8 +593,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          bash .github/install-packages.sh \
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
@@ -692,8 +689,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          bash .github/install-packages.sh \
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
@@ -811,8 +807,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          bash .github/install-packages.sh \
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
           g++ --version
@@ -1112,8 +1107,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          bash .github/install-packages.sh \
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
