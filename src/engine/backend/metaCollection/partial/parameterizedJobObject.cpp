@@ -247,7 +247,8 @@ enum Func {
 	enGetTemplate,
 	enGetMetadata,
 	enLock,
-	enUnlock
+	enUnlock,
+	enCheckFilling
 };
 
 void ibValueRecordDataObjectParameterizedJob::FillMethods(ibMemberTable& helper) const
@@ -267,6 +268,7 @@ void ibValueRecordDataObjectParameterizedJob::FillMethods(ibMemberTable& helper)
 	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 	helper.AppendProc(ibT("Lock"), ibT("Lock()"));
 	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
+	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));   // appended: the order is load-bearing
 }
 
 bool ibValueRecordDataObjectParameterizedJob::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -288,6 +290,9 @@ bool ibValueRecordDataObjectParameterizedJob::CallAsFunc(const long lMethodNum, 
 {
 	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectParameterizedJob::FillMethods))
 	{
+	case Func::enCheckFilling:
+		pvarRetValue = CheckFilling();
+		return true;
 	case enIsNew:
 		pvarRetValue = m_newObject;
 		return true;

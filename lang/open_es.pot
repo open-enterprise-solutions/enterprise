@@ -3374,7 +3374,7 @@ msgstr ""
 msgid "What the field may hold: one or several types - primitives (string with a length, number with precision and scale, date, boolean) and references. It decides the database columns: a composite type is stored as a type tag plus one column per kind, so adding a type changes the table."
 msgstr ""
 
-#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:309
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:316
 #: src/engine/backend/system/systemManagerEnum.h:169
 #: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:226
 #: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:264
@@ -3387,8 +3387,8 @@ msgstr ""
 msgid "Fill check"
 msgstr ""
 
-#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:310
-msgid "The field must be filled: a write that leaves it empty is refused with a message naming the field (and the line, in a tabular section or a record set), and the form shows it as required."
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:316
+msgid "The field must be filled: a write from the object's form, a posting and a record set's write refuse to leave it empty, with a message naming the field (and the line, in a tabular section or a record set); a script's Write() of an object stores what it is given, and CheckFilling() asks. The form shows the field as required."
 msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:311
