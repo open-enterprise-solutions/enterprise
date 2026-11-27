@@ -5521,7 +5521,7 @@ msgstr "Пасивний"
 
 #: src/engine/backend/metaCollection/partial/chartOfAccountsEnum.h:23
 msgid "Active/Passive"
-msgstr "Активний/Пасивний"
+msgstr "Активно-пасивний"
 
 #: src/engine/backend/metaCollection/partial/chartOfAccountsMetadata.cpp:187
 #: src/engine/backend/metaCollection/partial/chartOfAccountsMetadata.cpp:396
