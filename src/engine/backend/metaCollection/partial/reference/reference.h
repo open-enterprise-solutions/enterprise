@@ -234,6 +234,8 @@ public:
 	virtual ibString GetSourceCaption() const override { return GetString(); }
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
+	// The value a tabular section of this reference holds (valueInfo.h).
+	virtual ibValue* GetDataValue() override { return this; }
 	// Out-of-line (reference.cpp): the explorer build needs the COMPLETE metaobject types. Covariant
 	// GenericData* (matching ibSourceDataObject — the precise type, no cast): GenericData is complete via
 	// genericData.h, pulled in through srcDataObject.h.
