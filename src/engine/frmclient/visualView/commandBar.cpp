@@ -20,9 +20,6 @@ namespace {
 // The ids the tools take — the entry's place after the first.
 constexpr int kFirstToolId = wxID_HIGHEST + 1;
 
-// The ids of a group's menu — a menu of its own: they need only differ inside it.
-constexpr int kFirstMemberId = wxID_HIGHEST + 1;
-
 constexpr long long kSeparatorId = -1;
 
 // An entry's picture as its field names it — its id, or a file's PNG — hashed.
@@ -185,30 +182,56 @@ bool ibViewCommandBar::PopupGroup(int toolId)
 	if (idx >= entries.size() || entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Kind) != static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group))
 		return false;
 
-	// Each command in its place among the group's — a command gone since is there, not enabled, so the places are
-	// the places the server counts.
-	const ibProtocolNode group = entries[idx];
-	const std::vector<ibProtocolNode> members = group.Children();
-	ibMenu menu;   // the theme's - the bar is a window of the theme's (ibAuiToolBar : ibControl)
-	for (std::size_t member = 0; member < members.size(); ++member) {
-		wxMenuItem* const item = menu.Append(kFirstMemberId + static_cast<int>(member), members[member].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
-		const wxBitmap picture = ibProtocolPicture(members[member], ibProtocol::ibForm::ibCommandBar::Picture);
-		if (picture.IsOk())
-			item->SetBitmap(picture);
-		item->Enable(members[member].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
-	}
+	// Its entries under it, a group of them a submenu of its own — the command picked sent by its own id.
+	const std::vector<ibProtocolNode> members = entries[idx].Children();
 	if (members.empty())
 		return true;
+	ibMenu menu;   // the theme's - the bar is a window of the theme's (ibAuiToolBar : ibControl)
+	std::vector<long long> ids;
+	AppendEntries(menu, members, wxString(), ids);
 
 	const int chosen = m_bar->GetPopupMenuSelectionFromUser(menu, m_bar->GetToolRect(toolId).GetBottomLeft());
 	if (chosen == wxID_NONE)
 		return true;
+	const std::size_t place = static_cast<std::size_t>(chosen - kFirstEntryId);
+	if (place >= ids.size())
+		return true;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocol::ibEvent::Id, group.GetInt(ibProtocol::ibForm::ibCommandBar::Id))
-		.SetValue(ibProtocol::ibEvent::Member, static_cast<long long>(chosen - kFirstMemberId));
+	args.SetValue(ibProtocol::ibEvent::Id, ids[place]);
 	m_sendEvent(ibProtocol::ibEvent::ibKind::Command, args);
 	return true;
+}
+
+void ibViewCommandBar::AppendEntries(wxMenu& menu, const std::vector<ibProtocolNode>& entries, const wxString& cell,
+	std::vector<long long>& ids)
+{
+	for (const ibProtocolNode& entry : entries) {
+		wxString caption = entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption);
+		wxMenuItem* item = nullptr;
+		if (entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) == static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group)) {
+			ibMenu* const submenu = new ibMenu;
+			AppendEntries(*submenu, entry.Children(), cell, ids);
+			item = menu.AppendSubMenu(submenu, caption);
+			item->Enable(entry.GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
+		}
+		else {
+			if (entry.GetBool(ibProtocol::ibForm::ibCommandBar::CurrentCell, false) && !cell.empty()) {
+				wxString shown = cell;
+				shown.Replace(wxT("&"), wxT("&&"));   // the cell's text, not a mnemonic
+				caption << wxT(": ") << shown;
+			}
+			const wxString shortcut = entry.GetString(ibProtocol::ibForm::ibCommandBar::Shortcut);
+			if (!shortcut.empty())
+				caption << wxT('\t') << shortcut;
+			item = menu.Append(kFirstEntryId + static_cast<int>(ids.size()), caption);
+			ids.push_back(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id));
+			item->Enable(entry.GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
+		}
+		const wxBitmap picture = ibProtocolPicture(entry, ibProtocol::ibForm::ibCommandBar::Picture);
+		if (picture.IsOk())
+			item->SetBitmap(picture);
+	}
 }
 
 //*******************************************************************

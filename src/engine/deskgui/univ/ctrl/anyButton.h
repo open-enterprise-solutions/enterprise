@@ -22,13 +22,15 @@
 // Common button functionality
 // ----------------------------------------------------------------------------
 
+class ibStdAnyButtonInputHandler;
+
 // SEAM vs univ: wxAnyButtonBase sits on the native wxControl in our build
 class DESKGUI_API ibAnyButton : public ibControl
 {
 public:
     ibAnyButton() = default;
 
-    virtual ~ibAnyButton() = default;
+    virtual ~ibAnyButton();
 
     // ibAnyButton actions
     virtual void Toggle();
@@ -40,11 +42,9 @@ public:
                                long numArg = -1,
                                const wxString& strArg = wxEmptyString) override;
 
-    static ibInputHandler *GetStdInputHandler(ibInputHandler *handlerDef);
-    virtual ibInputHandler *DoGetStdInputHandler(ibInputHandler *handlerDef) override
-    {
-        return GetStdInputHandler(handlerDef);
-    }
+    // every button's one handler (and a check box's, whose own hands the mouse on to it): the one that holds the pressed
+    static ibStdAnyButtonInputHandler *GetStdInputHandler(ibInputHandler *handlerDef);
+    virtual ibInputHandler *DoGetStdInputHandler(ibInputHandler *handlerDef) override;
 
 public:
     // every button kind highlights on hover/press (lived only on ibButton
@@ -62,6 +62,7 @@ protected:
     virtual wxSize DoGetBestClientSize() const override;
 
     void OnPaint(wxPaintEvent& event);
+    void OnCaptureLost(wxMouseCaptureLostEvent& event);
 
     // current state
     bool m_isPressed,
@@ -97,6 +98,11 @@ public:
     virtual bool HandleFocus(ibInputConsumer *consumer,
                              const wxFocusEvent& event) override;
     virtual bool HandleActivation(ibInputConsumer *consumer, bool activated) override;
+
+    // stop what a press on the window started - its capture, its pressed look: the window lost the mouse or is being
+    // destroyed (the OnCaptureLost and the destructor of ibAnyButton and of ibCheckBox, whose handler hands the mouse
+    // on to this one). The handler is every button's and holds one at a time: for another one it does nothing
+    void StopPressing(ibInputConsumer *consumer);
 
 private:
     // the window (button) which has capture or nullptr and the flag telling if

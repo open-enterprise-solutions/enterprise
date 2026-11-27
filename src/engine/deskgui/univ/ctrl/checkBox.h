@@ -72,6 +72,8 @@ public:
         Create(parent, id, label, pos, size, style, validator, name);
     }
 
+    virtual ~ibCheckBox();
+
     bool Create(wxWindow *parent,
                 wxWindowID id,
                 const wxString& label,
@@ -144,6 +146,7 @@ protected:
     void Init();
 
     void OnPaint(wxPaintEvent& event);
+    void OnCaptureLost(wxMouseCaptureLostEvent& event);
 
     // send command event notifying about the checkbox state change
     virtual void SendEvent();

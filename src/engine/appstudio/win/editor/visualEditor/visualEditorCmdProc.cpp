@@ -9,6 +9,8 @@
 #include <set>
 
 #include "appstudio/docManager/templates/docViewModuleEditor.h"   // ibModuleEditDocument — Modify, Fetch, Post
+#include "core/picturePredefined.h"   // g_picCommandBarItemCLSID, g_picCommandGroupNormalCLSID — a new command's, a new submenu's
+#include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetPicture — an engine's picture
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue, ibWriteProtocolNode — a control's values
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // a layer's properties — a row's each
 #include "frmclient/mainFrame/objinspect/objinspect.h"
@@ -1025,9 +1027,10 @@ bool ibVisualEditorNotebook::ibVisualEditor::CanPasteFormCommand() const
 
 namespace {
 
-// The studio's layer-menu ids (the desktop's): a node is either the bar or one command, so the two sets never meet.
+// The studio's layer-menu ids (the desktop's): one menu a node — the bar's, a submenu's, a command's.
 enum {
 	kMenuAddCommand = wxID_HIGHEST + 3200,
+	kMenuAddSubmenu,
 	kMenuCut, kMenuCopy, kMenuPaste, kMenuDelete, kMenuMoveUp, kMenuMoveDown, kMenuProps,
 };
 
@@ -1035,6 +1038,65 @@ enum {
 ibProtocolNode FindCommandBar(const ibProtocolNode& control)
 {
 	return control.FindChild(ibProtocol::ibForm::ibCommandBar::Layers).FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar);
+}
+
+// The node at `path` under the bar's — each step a place among its holder's children; none: an empty node. No step: the
+// bar's itself.
+ibProtocolNode FindCommandBarNode(const ibProtocolNode& bar, const std::vector<unsigned int>& path)
+{
+	ibProtocolNode node = bar;
+	for (const unsigned int place : path) {
+		const std::vector<ibProtocolNode> children = node.Children();
+		if (place >= children.size())
+			return ibProtocolNode();
+		node = children[place];
+	}
+	return node;
+}
+
+// Whether a node of the bar is a submenu — its type's name (the desktop's ibValueCommandBar::ReadData asks its clsid).
+bool IsSubmenu(const ibProtocolNode& node)
+{
+	return node.GetType() == ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu;
+}
+
+// Whether a command or a submenu under `holder`, at any depth, other than the one at `except`, is called `name` — `at` the
+// path walked to `holder`.
+bool HasName(const ibProtocolNode& holder, const ibString& name, const std::vector<unsigned int>& except, std::vector<unsigned int>& at)
+{
+	const std::vector<ibProtocolNode> children = holder.Children();
+	for (unsigned int place = 0; place < children.size(); place++) {
+		at.push_back(place);
+		const bool found = (at != except && children[place].GetString(ibProtocol::ibView::ibFormDesigner::Name) == name)
+			|| HasName(children[place], name, except, at);
+		at.pop_back();
+		if (found)
+			return true;
+	}
+	return false;
+}
+
+// The names the bar's commands and submenus under `holder` are called, at any depth.
+void CollectNames(const ibProtocolNode& holder, std::set<wxString>& names)
+{
+	for (const ibProtocolNode& child : holder.Children()) {
+		names.insert(child.GetString(ibProtocol::ibView::ibFormDesigner::Name));
+		CollectNames(child, names);
+	}
+}
+
+// A command or a submenu given a name free among `taken` — its own when it is, else the first free CommandN / SubmenuN
+// (the desktop's GenerateItemName) — and the ones under it the same; each name taken then.
+void NameFree(ibProtocolNode node, std::set<wxString>& taken)
+{
+	const wxString prefix = IsSubmenu(node) ? wxT("Submenu") : wxT("Command");
+	wxString name = node.GetString(ibProtocol::ibView::ibFormDesigner::Name);
+	for (int n = 1; name.IsEmpty() || taken.contains(name); n++)
+		name = wxString::Format(wxT("%s%d"), prefix, n);
+	node.SetValue(ibProtocol::ibView::ibFormDesigner::Name, name);
+	taken.insert(name);
+	for (const ibProtocolNode& child : node.Children())
+		NameFree(child, taken);
 }
 
 } // namespace
@@ -1079,7 +1141,8 @@ ibProperty* ibValueLayerObject::CreateProperty(ibPropertyCategory* cat, ibDataNo
 	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
-void ibValueLayerObject::SetCommandItems(const std::vector<ibProtocolNode>& items, int selected) const
+void ibValueLayerObject::SetCommandItems(const std::vector<unsigned int>& under, const std::vector<ibProtocolNode>& items,
+	const std::vector<unsigned int>& selected) const
 {
 	if (!m_formHandler->IsEditable())
 		return;
@@ -1087,36 +1150,35 @@ void ibValueLayerObject::SetCommandItems(const std::vector<ibProtocolNode>& item
 	// Once the menu is gone: the tree the menu stands on is built anew — and this holder may go with it.
 	ibVisualEditorNotebook::ibVisualEditor* const formHandler = m_formHandler;
 	const long long controlId = m_controlId;
-	formHandler->CallAfter([formHandler, controlId, items, selected]() {
+	formHandler->CallAfter([formHandler, controlId, under, items, selected]() {
 		ibProtocolNode edited = formHandler->m_formNode.Clone();
 		std::vector<ibProtocolNode> path;
 		if (!FindPath(edited, controlId, path))
 			return;
-		ibProtocolNode bar = FindCommandBar(path.back());
-		if (!bar.IsNode())
+		const ibProtocolNode bar = FindCommandBar(path.back());
+		const ibProtocolNode holder = FindCommandBarNode(bar, under);
+		if (!bar.IsNode() || !holder.IsNode())
 			return;
 
-		// Each command's name unique among the bar's — a new one's, a pasted copy's that is taken gets the first free
-		// CommandN (the desktop's GenerateItemName).
+		// Each name unique on the whole bar — what the holder held goes first, so its names are free again; a new one's,
+		// a pasted copy's that is taken, and each under them, gets the first free CommandN / SubmenuN.
+		SetChildren(holder, {});
 		std::set<wxString> taken;
+		CollectNames(bar, taken);
 		std::vector<ibProtocolNode> named;
 		for (const ibProtocolNode& item : items) {
 			ibProtocolNode copy = item.Clone();
-			wxString name = copy.GetString(ibProtocol::ibView::ibFormDesigner::Name);
-			for (int n = 1; name.IsEmpty() || taken.contains(name); n++)
-				name = wxString::Format(wxT("Command%d"), n);
-			copy.SetValue(ibProtocol::ibView::ibFormDesigner::Name, name);
-			taken.insert(name);
+			NameFree(copy, taken);
 			named.push_back(copy);
 		}
-		SetChildren(bar, named);
+		SetChildren(holder, named);
 
 		ibProtocolNode request;
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Form));
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, edited);
 		ibProtocolNode answer;
-		if (formHandler->Execute(request, answer) && selected != wxNOT_FOUND)
-			formHandler->m_objectTree->SelectCommandItem(controlId, static_cast<unsigned int>(selected));
+		if (formHandler->Execute(request, answer) && !selected.empty())
+			formHandler->m_objectTree->SelectCommandItem(controlId, selected);
 	});
 }
 
@@ -1132,67 +1194,96 @@ ibProtocolNode ibValueCommandBar::FindRows(const ibProtocolNode& control) const
 	return control.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBar);
 }
 
-void ibValueCommandBar::PrepareDefaultMenu(ibMenu* menu) const
+void ibValueLayerObject::PrepareHolderMenu(ibMenu* menu) const
 {
-	menu->Append(kMenuAddCommand, _("Add command"));
+	// A new command and a new submenu, each with the picture its node has in the tree (CreateTree).
+	wxMenuItem* item = menu->Append(kMenuAddCommand, _("Add command"));
+	item->SetBitmap(ibBackendPicture::GetPicture(g_picCommandBarItemCLSID));
+	item = menu->Append(kMenuAddSubmenu, _("Add submenu"));
+	item->SetBitmap(ibBackendPicture::GetPicture(g_picCommandGroupNormalCLSID));
 	if (m_formHandler->PasteEntry(oes_clipboard_command_bar_item).IsNode()) {
 		wxMenuItem* paste = menu->Append(kMenuPaste, _("Paste\tCtrl+V"));
 		paste->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_PASTE, wxART_MENU));
 	}
 }
 
+bool ibValueLayerObject::ExecuteHolderMenu(const std::vector<unsigned int>& under, int menuId) const
+{
+	ibProtocolNode added;
+	if (menuId == kMenuAddCommand || menuId == kMenuAddSubmenu) {
+		if (m_formHandler->FetchRows(m_controlId)) {
+			const auto found = m_formHandler->m_rows.find(m_controlId);
+			if (found != m_formHandler->m_rows.end())
+				added = found->second.FindChild(menuId == kMenuAddSubmenu ? ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu
+					: ibProtocol::ibView::ibFormDesigner::CommandBarItem).FindChild(ibProtocol::ibView::ibFormDesigner::Node);
+		}
+		// A new command runs a new command of the form's, made as the command tree's Add makes one, and is bound to it by
+		// a form command's path, [its id]: it stands on the bar at once.
+		if (menuId == kMenuAddCommand && added.IsNode()) {
+			const long long formCommand = m_formHandler->CreateFormCommand();
+			if (formCommand == 0)
+				return true;
+			ibDataValue bound;
+			ibCommandDescriptionMemory::WriteNode(bound, ibCommandDescription(static_cast<ibMetaID>(formCommand)));
+			added.SetValue(ibProtocol::ibView::ibFormDesigner::BoundCommand, ibProtocolNode(*bound.AsChild()));
+		}
+	}
+	else if (menuId == kMenuPaste)
+		added = m_formHandler->PasteEntry(oes_clipboard_command_bar_item);
+	else
+		return false;
+	if (!added.IsNode())
+		return true;
+
+	std::vector<ibProtocolNode> path;
+	if (!FindPath(m_formHandler->m_formNode, m_controlId, path))
+		return true;
+	std::vector<ibProtocolNode> items = FindCommandBarNode(FindCommandBar(path.back()), under).Children();
+	items.push_back(added);
+	std::vector<unsigned int> selected = under;
+	selected.push_back(static_cast<unsigned int>(items.size()) - 1);
+	SetCommandItems(under, items, selected);
+	return true;
+}
+
+void ibValueCommandBar::PrepareDefaultMenu(ibMenu* menu) const
+{
+	PrepareHolderMenu(menu);
+}
+
 void ibValueCommandBar::ExecuteMenu(int menuId)
 {
-	// A new command is the server's (CommandBarItem's Node — the desktop's AddCommandItem), a pasted one the clipboard's;
-	// either is put last, and shown.
-	ibProtocolNode added;
-	if (menuId == kMenuAddCommand && m_formHandler->FetchRows(m_controlId)) {
-		const auto found = m_formHandler->m_rows.find(m_controlId);
-		if (found != m_formHandler->m_rows.end())
-			added = found->second.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBarItem).FindChild(ibProtocol::ibView::ibFormDesigner::Node);
-	}
-	else if (menuId == kMenuPaste) {
-		added = m_formHandler->PasteEntry(oes_clipboard_command_bar_item);
-	}
-	if (!added.IsNode())
-		return;
-	std::vector<ibProtocolNode> items = GetNode().Children();
-	items.push_back(added);
-	SetCommandItems(items, static_cast<int>(items.size()) - 1);
+	ExecuteHolderMenu({}, menuId);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
-	// Name must stay unique among the bar's items.
+	// Name must stay unique among the bar's commands and submenus, at any depth.
 	if (property->GetName() != ibProtocol::ibView::ibFormDesigner::Name)
 		return true;
 	std::vector<ibProtocolNode> path;
 	if (!FindPath(m_formHandler->m_formNode, m_controlId, path))
 		return true;
-	const std::vector<ibProtocolNode> items = FindCommandBar(path.back()).Children();
-	for (size_t idx = 0; idx < items.size(); idx++) {
-		if (idx != m_index && items[idx].GetString(ibProtocol::ibView::ibFormDesigner::Name) == newValue.GetString())
-			return false;
-	}
-	return true;
+	std::vector<unsigned int> at;
+	return !HasName(FindCommandBar(path.back()), newValue.GetString(), m_path, at);
 }
 
 ibProtocolNode ibValueCommandBarItem::FindNode(const ibProtocolNode& control) const
 {
-	const std::vector<ibProtocolNode> items = FindCommandBar(control).Children();
-	return m_index < items.size() ? items[m_index] : ibProtocolNode();
+	return m_path.empty() ? ibProtocolNode() : FindCommandBarNode(FindCommandBar(control), m_path);
 }
 
 ibProtocolNode ibValueCommandBarItem::FindRows(const ibProtocolNode& control) const
 {
-	const wxString name = GetNode().GetString(ibProtocol::ibView::ibFormDesigner::Name);
+	const ibProtocolNode node = GetNode();
+	const wxString name = node.GetString(ibProtocol::ibView::ibFormDesigner::Name);
 	for (const ibProtocolNode& rows : control.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBar).FindChild(ibProtocol::ibView::ibFormDesigner::Items).Children()) {
 		if (rows.GetString(ibProtocol::ibView::ibFormDesigner::Name) == name)
 			return rows;
 	}
-	return control.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBarItem);
+	return control.FindChild(IsSubmenu(node) ? ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu : ibProtocol::ibView::ibFormDesigner::CommandBarItem);
 }
 
 // Same items / icons / hotkeys as the control popup menu (ibVisualEditorItemPopupMenu).
@@ -1214,44 +1305,53 @@ void ibValueCommandBarItem::PrepareDefaultMenu(ibMenu* menu) const
 
 void ibValueCommandBarItem::ExecuteMenu(int menuId)
 {
+	if (m_path.empty())
+		return;
+	// Its holder — the bar, or the submenu it stands in — and its place there. A paste goes to the holder's end, as the
+	// holder's own menu puts one.
+	const std::vector<unsigned int> holder(m_path.begin(), m_path.end() - 1);
+	const unsigned int place = m_path.back();
+	if (menuId == kMenuPaste) {
+		ExecuteHolderMenu(holder, menuId);
+		return;
+	}
+
 	std::vector<ibProtocolNode> path;
 	if (!FindPath(m_formHandler->m_formNode, m_controlId, path))
 		return;
-	std::vector<ibProtocolNode> items = FindCommandBar(path.back()).Children();
-	if (m_index >= items.size())
+	std::vector<ibProtocolNode> items = FindCommandBarNode(FindCommandBar(path.back()), holder).Children();
+	if (place >= items.size())
 		return;
+	// The path of the place it is moved to.
+	const auto at = [&holder](unsigned int to) {
+		std::vector<unsigned int> moved = holder;
+		moved.push_back(to);
+		return moved;
+	};
 
 	switch (menuId) {
 	case kMenuCopy:
-		m_formHandler->CopyEntry(items[m_index], oes_clipboard_command_bar_item, items[m_index].GetString(ibProtocol::ibView::ibFormDesigner::Name));
+		m_formHandler->CopyEntry(items[place], oes_clipboard_command_bar_item, items[place].GetString(ibProtocol::ibView::ibFormDesigner::Name));
 		break;
 	case kMenuCut:
-		m_formHandler->CopyEntry(items[m_index], oes_clipboard_command_bar_item, items[m_index].GetString(ibProtocol::ibView::ibFormDesigner::Name));
-		items.erase(items.begin() + m_index);
-		SetCommandItems(items, wxNOT_FOUND);
+		m_formHandler->CopyEntry(items[place], oes_clipboard_command_bar_item, items[place].GetString(ibProtocol::ibView::ibFormDesigner::Name));
+		items.erase(items.begin() + place);
+		SetCommandItems(holder, items, {});
 		break;
-	case kMenuPaste: {
-		const ibProtocolNode pasted = m_formHandler->PasteEntry(oes_clipboard_command_bar_item);
-		if (pasted.IsNode()) {
-			items.push_back(pasted);
-			SetCommandItems(items, static_cast<int>(items.size()) - 1);
-		}
-		break;
-	}
 	case kMenuDelete:
-		items.erase(items.begin() + m_index);
-		SetCommandItems(items, wxNOT_FOUND);
+		items.erase(items.begin() + place);
+		SetCommandItems(holder, items, {});
 		break;
 	case kMenuMoveUp:
-		if (m_index > 0) {
-			std::swap(items[m_index], items[m_index - 1]);
-			SetCommandItems(items, static_cast<int>(m_index) - 1);
+		if (place > 0) {
+			std::swap(items[place], items[place - 1]);
+			SetCommandItems(holder, items, at(place - 1));
 		}
 		break;
 	case kMenuMoveDown:
-		if (m_index + 1 < items.size()) {
-			std::swap(items[m_index], items[m_index + 1]);
-			SetCommandItems(items, static_cast<int>(m_index) + 1);
+		if (place + 1 < items.size()) {
+			std::swap(items[place], items[place + 1]);
+			SetCommandItems(holder, items, at(place + 1));
 		}
 		break;
 	case kMenuProps:
@@ -1261,4 +1361,29 @@ void ibValueCommandBarItem::ExecuteMenu(int menuId)
 		m_formHandler->m_objectTree->SelectCommandItem(this);
 		break;
 	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+// A holder's menu first — what is added and pasted goes into it — then a command's but its paste.
+void ibValueCommandBarSubmenu::PrepareDefaultMenu(ibMenu* menu) const
+{
+	PrepareHolderMenu(menu);
+	menu->AppendSeparator();
+	wxMenuItem* item = nullptr;
+	item = menu->Append(kMenuCut,  _("Cut\tCtrl+X"));  item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_CUT, wxART_MENU));
+	item = menu->Append(kMenuCopy, _("Copy\tCtrl+C")); item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_COPY, wxART_MENU));
+	menu->AppendSeparator();
+	item = menu->Append(kMenuDelete, _("Delete\tCtrl+D")); item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_MENU));
+	menu->AppendSeparator();
+	item = menu->Append(kMenuMoveUp,   _("Move Up\tAlt+Up"));    item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_GO_UP, wxART_MENU));
+	item = menu->Append(kMenuMoveDown, _("Move Down\tAlt+Down")); item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_GO_DOWN, wxART_MENU));
+	menu->AppendSeparator();
+	item = menu->Append(kMenuProps, _("Properties"));           item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_HELP_SETTINGS, wxART_MENU));
+}
+
+void ibValueCommandBarSubmenu::ExecuteMenu(int menuId)
+{
+	if (!ExecuteHolderMenu(GetPath(), menuId))
+		ibValueCommandBarItem::ExecuteMenu(menuId);
 }

@@ -608,12 +608,17 @@ namespace ibProtocol {
 			inline constexpr const char* Type           = "Type";
 			inline constexpr const char* Visible        = "Visible";
 			inline constexpr const char* Menu           = "Menu";
-			// …a control's rows: the bar's rows (CommandBar — and Items, each command's of it by its Name) and a new
-			// command's, with the node it is (Node) — the bar's commands the client adds.
-			inline constexpr const char* CommandBar     = "CommandBar";
-			inline constexpr const char* Items          = "Items";
-			inline constexpr const char* CommandBarItem = "CommandBarItem";
-			inline constexpr const char* Node           = "Node";
+			// …a control's rows: the bar's rows (CommandBar — and Items, each command's and submenu's of it at any depth by
+			// its Name), a new command's and a new submenu's, each with the node it is (Node) — the bar's commands and
+			// submenus the client adds. A submenu's node is of its type (CommandBarSubmenu), its commands and submenus its
+			// children; a command's node holds the command it runs (BoundCommand — as the core writes a command's path,
+			// ibCommandDescriptionMemory).
+			inline constexpr const char* CommandBar        = "CommandBar";
+			inline constexpr const char* Items             = "Items";
+			inline constexpr const char* CommandBarItem    = "CommandBarItem";
+			inline constexpr const char* CommandBarSubmenu = "CommandBarSubmenu";
+			inline constexpr const char* Node              = "Node";
+			inline constexpr const char* BoundCommand      = "BoundCommand";
 			// The attribute tree — the form's attributes, a row each (its node's id the attribute's) — Name, Main, Path,
 			// Targets, TableSection, DropControl, HasComposition, Menu (Column — a value table's column); a row under one
 			// (ibRequest::Composition) the same, and UnderList. A door about one names it by Attribute (0: a new one).

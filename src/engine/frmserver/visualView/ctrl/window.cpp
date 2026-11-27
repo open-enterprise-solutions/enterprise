@@ -109,7 +109,7 @@ void ibValueWindowComposite::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValueWindow::OnUpdate(state, host);
 	// A suppressed bar is simply not in the state: the form's own bar carries those commands.
 	if (HasCommandBar())
-		GetCommandBar()->Update(state.Child(ibProtocol::ibForm::ibCommandBar::CommandBar));
+		GetCommandBar()->Update(state.Child(ibProtocol::ibForm::ibCommandBar::CommandBar), host);
 }
 
 bool ibValueWindowComposite::WriteData(ibDataNode& node) const

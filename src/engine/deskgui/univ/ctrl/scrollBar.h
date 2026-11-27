@@ -19,6 +19,7 @@
 class ibWindow;
 
 class ibScrollTimer;
+class ibStdScrollBarInputHandler;
 
 #include "deskgui/univ/ctrl/scrollArrow.h"
 #include <wx/renderer.h>
@@ -106,11 +107,9 @@ public:
                                long numArg = 0,
                                const wxString& strArg = wxEmptyString) override;
 
-    static ibInputHandler *GetStdInputHandler(ibInputHandler *handlerDef);
-    virtual ibInputHandler *DoGetStdInputHandler(ibInputHandler *handlerDef) override
-    {
-        return GetStdInputHandler(handlerDef);
-    }
+    // every scrollbar's one handler: the one that holds the pressed
+    static ibStdScrollBarInputHandler *GetStdInputHandler(ibInputHandler *handlerDef);
+    virtual ibInputHandler *DoGetStdInputHandler(ibInputHandler *handlerDef) override;
 
     // scrollbars around a normal window should not receive the focus
     virtual bool AcceptsFocus() const override;

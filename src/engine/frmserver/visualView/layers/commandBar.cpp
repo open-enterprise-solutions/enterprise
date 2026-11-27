@@ -13,6 +13,7 @@
 #include "backend/metaCollection/metaCommandGroupObject.h" // the platform's groups + the declared ones, in order
 #include <functional>                            // std::function — the recursive section walk
 #include "frmserver/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID — the form's tables (their own commands)
+#include "frmserver/visualView/visualHost.h"    // IsStudioHost — who draws a command with nothing to run
 #include "backend/backend_picture.h"            // ibBackendPicture::SendPicture — every command's picture, by its id
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
 #include "core/description/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
@@ -340,6 +341,16 @@ void ibValueCommandBar::BuildQuickFilters()
 		m_commands.emplace_back();
 }
 
+namespace {
+// An entry of the author's its id from `id` on, a group before what it holds — the bar's ids, wherever it stands.
+void NumberEntry(ibCommandEntry& entry, ibActionID& id)
+{
+	entry.id = id++;
+	for (ibCommandEntry& member : entry.members)
+		NumberEntry(member, id);
+}
+}   // namespace
+
 const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 {
 	// (Re)build from scratch so toggling AutoFill stays in sync (a stale auto-filled set must not
@@ -349,7 +360,6 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	// so every use goes through `auto` (deduced, never spelled). That also blocks hoisting it into
 	// a named helper/param, so the manual branch fetches it per action-bound item (few in practice).
 	m_commands.clear();
-	m_autoItems.clear();   // release last round's transient object-command items before rebuilding
 
 	// ⭐⭐ THE QUICK FILTERS COME FIRST — the lines the author marked «quick access», one tool each.
 	// «Also in the list header — the ones people change daily» was the whole of that setting's spec,
@@ -372,9 +382,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	std::vector<ibCommandEntry> ownCommands;
 	// AutoFill ALSO surfaces the owner OBJECT's OWN commands — its structural command children (the
 	// "Commands" node under a Catalog / Document / …). This is auto-generation honoring the object's own commands:
-	// each object command becomes a TRANSIENT item (m_autoItems, not serialized) carrying the command
-	// by metaId, so a click resolves + runs it through the exact same path a manually-bound command
-	// button uses (ExecuteCommand -> GetCommandMetaId -> ibBackendCommandItem::Execute). The owner match
+	// each object command becomes an entry carrying the command by metaId (one hop), so a click runs it through
+	// the exact same path a manually-bound command uses (ExecuteCommand -> ExecuteValueByPath). The owner match
 	// is by CONSTRUCTION — GetCommandArrayObject returns only THIS object's commands.
 	// Gate on the FORM'S OWN bar (m_owner is the ibValueForm): a sub-control's bar (a tablebox / list) must
 	// NOT auto-surface object commands — those land there only when one is deliberately dropped on it
@@ -385,23 +394,27 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			// object-command range: above any real action id, below the manual synthetic ids (32000+),
 			// under the 32767 tool-id ceiling wxMenuItemBase asserts on.
 			ibActionID cmdId = 31000;
-			auto transientItem = [this](const ibValueMetaObjectCommand* cmd) -> ibValueCommandBarItem* {
-				ibValueCommandBarItem* item = new ibValueCommandBarItem();
-				item->SetBar(this);
-				item->SetName(cmd->GetName());
-				item->SetCommandMetaId(cmd->GetMetaID());
-				m_autoItems.emplace_back(item);   // owns it for the lifetime of m_commands (raw ref below)
-				return item;
+			// Each command an entry of its own id, standing on the bar or filed under a group alike: its caption, its
+			// picture (the command determines it), greyed where a view-only form forbids a command that changes data,
+			// and the command it runs, by its metaId.
+			auto commandEntry = [&cmdId, viewOnly](const ibValueMetaObjectCommand* cmd) {
+				ibString caption = cmd->GetSynonym();
+				if (caption.IsEmpty()) caption = cmd->GetName();
+				ibCommandEntry entry(cmdId++, caption, ibPictureDescription(cmd->GetClassType()),
+					ibRepresentation_PictureAndText, !(viewOnly && cmd->GetModifiesData()));
+				entry.command = ibCommandDescription(cmd->GetMetaID());
+				return entry;
 			};
 
 			// ⭐⭐ A GROUP OF THE FORM COMMAND BAR IS ONE BUTTON — whatever is filed under it goes into ITS
 			// submenu instead of standing on the bar by itself. Gathered in the order the groups are first met,
 			// each with the commands in the order they came.
-			std::vector<std::pair<const ibValueMetaObjectCommandGroup*, std::vector<ibValueCommandBarItem*>>> groups;
-			auto fileUnder = [&groups](const ibValueMetaObjectCommandGroup* group, ibValueCommandBarItem* item) {
+			std::vector<std::pair<const ibValueMetaObjectCommandGroup*, std::vector<ibCommandEntry>>> groups;
+			auto fileUnder = [&groups](const ibValueMetaObjectCommandGroup* group, ibCommandEntry&& entry) {
 				for (auto& g : groups)
-					if (g.first == group) { g.second.push_back(item); return; }
-				groups.push_back({ group, { item } });
+					if (g.first == group) { g.second.push_back(std::move(entry)); return; }
+				groups.push_back({ group, {} });
+				groups.back().second.push_back(std::move(entry));
 			};
 			auto formBarGroupOf = [](const ibValueMetaObjectCommand* cmd) -> const ibValueMetaObjectCommandGroup* {
 				const ibValueMetaObjectCommandGroup* group = cmd->GetCommandGroup();
@@ -412,16 +425,10 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 				// …nor a command of a part of the system this base does not use (featureOptionGate.h).
 				if (cmd == nullptr || cmd->IsDeleted() || !ibFeatureOptionGate::IsAvailable(cmd))
 					continue;
-				ibValueCommandBarItem* item = transientItem(cmd);
-				if (const ibValueMetaObjectCommandGroup* group = formBarGroupOf(cmd)) {
-					fileUnder(group, item);
-					continue;
-				}
-				ibString caption = cmd->GetSynonym();
-				if (caption.IsEmpty()) caption = cmd->GetName();
-				const bool modifies = cmd->GetModifiesData();
-				ownCommands.emplace_back(cmdId++, caption, ibPictureDescription(cmd->GetClassType()),   // the command determines its picture
-					ibRepresentation_PictureAndText, !(viewOnly && modifies), item);
+				if (const ibValueMetaObjectCommandGroup* group = formBarGroupOf(cmd))
+					fileUnder(group, commandEntry(cmd));
+				else
+					ownCommands.push_back(commandEntry(cmd));
 			}
 
 			// …AND THE SHARED COMMANDS FILED UNDER SUCH A GROUP, when they are typed FOR this form's OBJECT: a form
@@ -439,18 +446,17 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 					if (cmd == nullptr || cmd->IsDeleted() || !CommandIsTypedFor(cmd, formTypes) || !ibFeatureOptionGate::IsAvailable(cmd))
 						continue;
 					if (const ibValueMetaObjectCommandGroup* group = formBarGroupOf(cmd))
-						fileUnder(group, transientItem(cmd));
+						fileUnder(group, commandEntry(cmd));
 				}
 			}
 
-			for (const auto& g : groups) {
+			for (auto& g : groups) {
 				const ibValueMetaObjectCommandGroup* group = g.first;
-				ibCommandEntry entry(cmdId++, group->GetSynonym(), group->IsEmptyPicture() ? ibPictureDescription() : group->GetPictureDesc(),
-					ibRepresentation_PictureAndText);
+				ibCommandEntry& entry = groupEntries.emplace_back(cmdId++, group->GetSynonym(),
+					group->IsEmptyPicture() ? ibPictureDescription() : group->GetPictureDesc(), ibRepresentation_PictureAndText);
 				entry.kind = ibCommandEntryKind_Group;
-				entry.members = g.second;
+				entry.members = std::move(g.second);
 				entry.tooltip = group->GetToolTip();
-				groupEntries.push_back(entry);
 			}
 		}
 	}
@@ -484,22 +490,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 		};
 
 		// ⭐ A GROUP OF STANDARD ACTIONS IS ONE BUTTON TOO (a table's Search: Find, Advanced search, Cancel search),
-		// standing where the first of them would: each a transient item bound to its action as a hand-made item is —
-		// [id] on the form, [source, id] on a table (GatherFormCommands) — so pressing one and drawing it go the road a
-		// group of commands goes (ExecuteCommand(id, member), Update). A table bound to nothing has no path to bind
-		// by: its group's actions stand by themselves.
-		const ibTypeControlFactory* const ownerSource = dynamic_cast<const ibTypeControlFactory*>(m_owner);
-		const auto actionDesc = [&](const ibActionID& id, ibCommandDescription& desc) {
-			if (dynamic_cast<ibValueForm*>(m_owner) != nullptr) {
-				desc = ibCommandDescription(id);
-				return true;
-			}
-			if (ownerSource == nullptr || ownerSource->GetSourceDesc().GetPath().empty())
-				return false;
-			desc.AppendCommand(ownerSource->GetSourceDesc().GetPath().front().m_id);
-			desc.AppendCommand(id);
-			return true;
-		};
+		// standing where the first of them would: each action an entry under it, its id the action's own — pressed, it
+		// runs as it would standing by itself (CallAsAction).
 		std::map<ibString, size_t> actionGroups;   // a group's caption → its entry
 		ibActionID groupId = g_actionGroupIdFirst;
 
@@ -519,21 +511,14 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 				: (actions.IsCreatePictureAndText(id) ? ibRepresentation_PictureAndText : ibRepresentation_Picture);
 			const bool enabled = actions.IsEnabled(id) && !(viewOnly && actions.GetModifiesDataByID(id));   // greyed if it changes data
 			const ibString group = actions.GetGroupByID(id);
-			ibCommandDescription desc;
-			if (!group.IsEmpty() && actionDesc(id, desc)) {
+			if (!group.IsEmpty()) {
 				auto found = actionGroups.find(group);
 				if (found == actionGroups.end()) {
 					ibCommandEntry& entry = m_commands.emplace_back(groupId++, group, pic, rep);
 					entry.kind = ibCommandEntryKind_Group;
 					found = actionGroups.emplace(group, m_commands.size() - 1).first;
 				}
-				ibValueCommandBarItem* item = new ibValueCommandBarItem();
-				item->SetBar(this);
-				item->SetName(actions.GetNameByID(id));
-				item->SetCommandDesc(desc);
-				item->SetEnabled(actions.IsEnabled(id));
-				m_autoItems.emplace_back(item);   // owns it for the lifetime of m_commands (raw ref below)
-				m_commands[found->second].members.push_back(item);
+				m_commands[found->second].members.emplace_back(id, actions.GetCaptionByID(id), pic, rep, enabled).isDefault = actions.IsDefault(id);
 				continue;
 			}
 			m_commands.emplace_back(id, actions.GetCaptionByID(id), pic, rep, enabled).isDefault = actions.IsDefault(id);
@@ -543,40 +528,13 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	m_commands.insert(m_commands.end(), groupEntries.begin(), groupEntries.end());
 	// …and the object's plain commands after them, where they always stood.
 	m_commands.insert(m_commands.end(), ownCommands.begin(), ownCommands.end());
-	// Manual commands — each maps to its bound Action's id when one is set (click dispatches through
-	// the owner's CallAsAction), else a synthetic id. Caption / picture fall back to the action's
-	// when the item leaves them empty. Hidden item (Visible off) dropped; disabled (Enabled off)
-	// kept but greyed. Synthetic id stays < 32767 — the overflow dropdown builds a wxMenuItem from
-	// it and wxMenuItemBase asserts outside [0, 32767); sit under the ceiling, above any real id.
-	// Each item's existence + look come from ResolveCommand (below) — the ONE resolve every projection shares, so a
-	// bar item, a bare button and the inspector cell can't drift on "is this command alive / what's its caption+icon".
+	// Manual commands and submenus, synthetic ids from here. Synthetic id stays < 32767 — the overflow dropdown builds
+	// a wxMenuItem from it and wxMenuItemBase asserts outside [0, 32767); sit under the ceiling, above any real id.
 	ibActionID synthId = 32000;
-	for (const auto& item : m_items) {
-		// Hidden (Visible off) or hidden by the feature options it names — dropped the same way.
-		if (item == nullptr || !item->IsVisible() || !item->IsAvailable())
-			continue;
-		const ibCommandDescription bindDesc = item->GetBindingDesc();
-		// A command projection renders ONLY when it carries a command (actionEvent is retired — the command is the
-		// sole binding). An item with none is inert — skip it, no empty tool on the bar (same rule as a bare button
-		// and as a command dropped on a tableBox).
-		if (!bindDesc.IsOk())
-			continue;
-		// The COMMAND owns the item's look AND its "modifies data" flag; the item merely obeys. THE one resolve
-		// (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + picture + modifies, the
-		// SAME decision the button and the inspector cell use. A truly gone command misses BOTH -> drop the projection
-		// entirely (nothing to click). The item's own caption / picture only OVERRIDE the look where set.
-		ibString cmdCaption; ibPictureDescription cmdPicture; bool cmdModifies = true; bool cmdPicAndText = true;
-		if (!ResolveCommand(bindDesc, cmdCaption, cmdPicture, &cmdModifies, nullptr, &cmdPicAndText))
-			continue;
-		const ibString caption = item->GetCaption().IsEmpty() ? cmdCaption : item->GetCaption();
-		const ibPictureDescription pic = item->IsEmptyPicture() ? cmdPicture : item->GetPictureDesc();   // the command's when the item sets none
-		const bool enabled = item->IsEnabled() && !(viewOnly && cmdModifies);   // greyed per the COMMAND's flag
-		// The item's OWN Representation wins; left on Auto it takes the COMMAND's default (a standard action like
-		// Close / Update is picture-only, Add / Post is picture+text) — no longer forced to text+picture.
-		ibRepresentation rep = item->GetRepresentation();
-		if (rep == ibRepresentation::ibRepresentation_Auto)
-			rep = cmdPicAndText ? ibRepresentation::ibRepresentation_PictureAndText : ibRepresentation::ibRepresentation_Picture;
-		m_commands.emplace_back(synthId++, caption, pic, rep, enabled, item).isDefault = item->IsDefault();
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
+		ibCommandEntry entry;
+		if (GetChild(idx)->GetCommandEntry(entry))
+			NumberEntry(m_commands.emplace_back(std::move(entry)), synthId);
 	}
 	return m_commands;
 }
@@ -695,36 +653,38 @@ void ibValueCommandBar::ExecuteCommand(const ibActionID& id, ibBackendValueForm*
 	// lookup below would find no item and hand the id to CallAsAction as if it were a system action.
 	if (ExecuteQuickFilter(id, m_owner->GetOwnerForm()))
 		return;
-	// …and a GROUP runs nothing by itself: its submenu does, which the toolbar opens under it. Asked here for
-	// the same reason — with no item behind it, the id would reach CallAsAction.
-	if (const ibCommandEntry* entry = FindEntry(id); entry != nullptr && entry->kind == ibCommandEntryKind_Group)
+	// …and a GROUP runs nothing by itself: its submenu does, which the toolbar opens under it; nor does a command of the
+	// author's with nothing to run. Asked here for the same reason — with no command behind it, the id would reach
+	// CallAsAction.
+	const ibCommandEntry* const entry = FindEntry(id);
+	if (entry != nullptr && (entry->kind == ibCommandEntryKind_Group || entry->IsUnbound()))
 		return;
-	// A manual command carries a synthetic tool-id -> resolve the item's command-hop binding. AutoFill /
-	// standard commands have no item (FindItemByCommandId == null) -> the tool-id IS the system action.
-	if (ibValueCommandBarItem* item = FindItemByCommandId(id)) {
-		// Walk the command-hop binding through the command OBJECT — it resolves each id and EXECUTES the leaf
-		// (a source object walks a path to FETCH a value; this walks to RUN a command). actionEvent is retired,
-		// so this hop path is the ONLY dispatch for a manual item.
-		const ibCommandDescription desc = item->GetBindingDesc();
-		if (desc.IsOk())
-			ExecuteValueByPath(desc);   // the bar IS-A command door; gate = its owner frame's form
-	}
+	// A command of the author's or of an object carries what it runs -> walk its command-hop path through the command
+	// OBJECT, which resolves each id and EXECUTES the leaf (a source object walks a path to FETCH a value; this walks to
+	// RUN a command), wherever the entry stands. A standard action carries none -> the tool-id IS the system action.
+	if (entry != nullptr && entry->command.IsOk())
+		ExecuteValueByPath(entry->command);   // the bar IS-A command door; gate = its owner frame's form
 	else
 		m_owner->CallAsAction(id, form);   // AutoFill / standard command — the tool id IS the system action
 }
 
-// ⭐ ONE COMMAND OF A GROUP — the member the client chose from the submenu the frame listed. Resolved again
-// here rather than trusted: the members are transient items of the bar's AutoFill set, which any refresh
-// rebuilds, so the member is found by its place in the entry AS IT STANDS, and a command gone since is not run.
-void ibValueCommandBar::ExecuteCommand(const ibActionID& id, size_t member)
+namespace {
+// The entry of this id among `entries` and under each group of them, to any depth.
+const ibCommandEntry* FindIn(const std::vector<ibCommandEntry>& entries, const ibActionID& id)
 {
-	const ibCommandEntry* entry = FindEntry(id);
-	if (entry == nullptr || entry->kind != ibCommandEntryKind_Group || member >= entry->members.size())
-		return;
-	const ibCommandDescription desc = entry->members[member]->GetBindingDesc();
-	ibString caption; ibPictureDescription picture;
-	if (ResolveCommand(desc, caption, picture))
-		ExecuteValueByPath(desc);
+	for (const ibCommandEntry& entry : entries) {
+		if (entry.id == id)
+			return &entry;
+		if (const ibCommandEntry* const found = FindIn(entry.members, id))
+			return found;
+	}
+	return nullptr;
+}
+}   // namespace
+
+const ibCommandEntry* ibValueCommandBar::FindEntry(const ibActionID& id) const
+{
+	return FindIn(m_commands, id);
 }
 
 void ibValueCommandBar::Search(const ibString& text)
@@ -737,52 +697,47 @@ void ibValueCommandBar::Search(const ibString& text)
 		m_owner->SetSearchText(text);
 }
 
-void ibValueCommandBar::Update(ibDataNode& state)
+namespace {
+// Whether `host` draws the entry: every one, but a command of the author's with nothing to run — the studio's alone.
+bool IsDrawnBy(const ibCommandEntry& c, const ibVisualHost* host)
 {
-	ibValueForm* form = m_owner != nullptr ? m_owner->GetOwnerForm() : nullptr;
-	const bool viewOnly = form != nullptr && form->IsViewOnly();
+	return !c.IsUnbound() || host->IsStudioHost();
+}
 
+// ONE ENTRY as a client draws it — and a group's entries under it the same way, to any depth, those `host` draws. On the
+// bar the representation decides which of the two a client shows — said here once, not left to each client; a line of a
+// menu always says its caption.
+void WriteEntry(ibDataNode& node, const ibCommandEntry& c, const ibMetaData* metaData, bool inMenu, const ibVisualHost* host)
+{
+	node.SetValue(ibProtocol::ibForm::ibCommandBar::Id, c.id);
+	if (c.id == ibNOT_FOUND) {
+		node.SetValue(ibProtocol::ibForm::ibCommandBar::Separator, true);
+		return;
+	}
+	node.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, !inMenu && c.representation == ibRepresentation_Picture ? ibString() : c.caption);
+	node.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibDataValue() : ibBackendPicture::SendPicture(c.picture, metaData));
+	node.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
+	node.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
+	node.SetValue(ibProtocol::ibForm::ibCommandBar::Default, c.isDefault);
+	node.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(c.kind));
+	for (const ibCommandEntry& member : c.members)
+		if (IsDrawnBy(member, host))
+			WriteEntry(node.AddChild(0, 0), member, metaData, true, host);
+}
+}   // namespace
+
+void ibValueCommandBar::Update(ibDataNode& state, ibVisualHost* host)
+{
 	for (const ibCommandEntry& c : BuildCommands()) {
-		ibDataNode& entry = state.AddChild(0, 0);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, c.id);
-		if (c.id == ibNOT_FOUND) {
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Separator, true);
+		if (!IsDrawnBy(c, host))
 			continue;
-		}
+		ibDataNode& entry = state.AddChild(0, 0);
+		WriteEntry(entry, c, GetMetaData(), false, host);
 
-		// The representation decides which of the two a client shows — said here once, not left to each client.
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, c.representation == ibRepresentation_Picture ? ibString() : c.caption);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibDataValue() : ibBackendPicture::SendPicture(c.picture, GetMetaData()));
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Default, c.isDefault);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(c.kind));
-
-		// An item of the bar's own — its place among them, as its node is written (WriteData): what the studio selects
-		// it by when its tool is pressed (the desktop's FindItemByCommandId).
-		if (c.item != nullptr) {
-			std::int32_t position = 0;
-			for (const auto& item : m_items) {
-				if (item == c.item)
-					break;
-				if (item != nullptr)
-					++position;
-			}
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Position, position);
-		}
-
-		// A GROUP carries its submenu: its commands in the order they were gathered, each with the caption,
-		// picture and "modifies data" the command itself answers — the same resolve every projection uses.
-		for (const ibValueCommandBarItem* item : c.members) {
-			ibString caption; ibPictureDescription picture; bool modifies = true;
-			ibDataNode& member = entry.AddChild(0, 0);
-			const bool resolved = ResolveCommand(item->GetBindingDesc(), caption, picture, &modifies);
-			member.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, caption);
-			member.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
-			// A member gone since the bar was built is listed, disabled, so the places stay the places
-			// ExecuteCommand(id, member) counts.
-			member.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, resolved && item->IsEnabled() && !(viewOnly && modifies));
-		}
+		// A command or a submenu the author put on the bar itself — its place among the bar's children, as its node is
+		// written (WriteData): what the studio selects it by when its tool is pressed.
+		if (c.item != nullptr)
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Position, static_cast<std::int32_t>(c.item->GetParentPosition()));
 	}
 
 	// …and the search field at its end, holding what is looked for.
@@ -791,29 +746,205 @@ void ibValueCommandBar::Update(ibDataNode& state)
 }
 
 //***********************************************************************
+//*                   Command bar CHILDREN (shared)                     *
+//***********************************************************************
+
+namespace {
+// Whether a child of `holder`, or of a submenu under it at any depth, other than `except`, is called `name`.
+bool HasName(const ibValueLayerObject* holder, const ibString& name, const ibValueLayerObject* except)
+{
+	for (unsigned int idx = 0; idx < holder->GetChildCount(); idx++) {
+		const ibValueLayerObject* const child = holder->GetChild(idx);
+		if (child != except && child->GetName() == name)
+			return true;
+		if (child->IsLayerContainer() && HasName(child, name, except))
+			return true;
+	}
+	return false;
+}
+
+// A new child of `holder` — a command or a submenu — last, under the first name of its kind free on the whole bar.
+template <class T>
+T* AddLayerChild(ibValueLayerObject* holder, const ibString& prefix)
+{
+	T* const child = new T();
+	child->SetParent(holder);   // first: the free name is asked of the bar it now hangs in
+	if (const ibValueCommandBar* const bar = child->GetBar())
+		child->SetName(bar->GenerateItemName(prefix));
+	holder->AddChild(child);
+	return child;
+}
+
+// The children of `holder` (the bar, a submenu) as sub-nodes of `node`, in order — each of its type, so a submenu is
+// told from a command when read back (here, and in the studio by its type's name).
+void WriteChildren(const ibValueLayerObject* holder, ibDataNode& node)
+{
+	for (unsigned int idx = 0; idx < holder->GetChildCount(); idx++) {
+		const ibValueLayerObject* const child = holder->GetChild(idx);
+		child->WriteData(node.AddChild(child->GetClassType(), idx));
+	}
+}
+
+// …and read back: a sub-node of a submenu's type a submenu, any other a command.
+template <class THolder>
+void ReadChildren(THolder* holder, const ibDataNode& node)
+{
+	holder->RemoveAllChildren();
+	for (const ibDataNode& child : node.Children()) {
+		if (child.GetClsid() == g_commandBarSubmenuCLSID)
+			holder->AddSubmenu()->ReadData(child);   // ReadData overwrites the name
+		else
+			holder->AddCommandItem()->ReadData(child);
+	}
+}
+}   // namespace
+
+//***********************************************************************
 //*                       Command bar ITEM (child)                      *
 //***********************************************************************
 
 ibValueFrame* ibValueCommandBarItem::GetOwnerFrame() const
 {
 	// Reach the owner frame through the bar — feeds metadata (base uses this).
-	return m_bar != nullptr ? m_bar->GetOwnerFrame() : nullptr;
+	const ibValueCommandBar* const bar = GetBar();
+	return bar != nullptr ? bar->GetOwnerFrame() : nullptr;
 }
 
 bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
-	// Name must stay unique among the bar's items.
-	if (property == m_propertyName && m_bar != nullptr && m_bar->HasItemName(newValue.GetString(), this))
+	// Name must stay unique among the bar's commands and submenus.
+	const ibValueCommandBar* const bar = GetBar();
+	if (property == m_propertyName && bar != nullptr && bar->HasItemName(newValue.GetString(), this))
 		return false;
 	return true;
+}
+
+bool ibValueCommandBarItem::GetCommandEntry(ibCommandEntry& entry) const
+{
+	// Hidden (Visible off, or by the feature options it names) — none; disabled (Enabled off) — kept, greyed.
+	if (!IsVisible() || !IsAvailable())
+		return false;
+	entry.item = this;
+	// The COMMAND owns the item's look AND its "modifies data" flag; the item merely obeys. THE one resolve
+	// (ResolveCommand on the door): walk + reliable gather fallback -> existence + caption + picture + modifies, the
+	// SAME decision the button and the inspector cell use. The item's own caption / picture only OVERRIDE the look where
+	// set.
+	const ibCommandDescription bindDesc = GetBindingDesc();
+	ibString cmdCaption; ibPictureDescription cmdPicture; bool cmdModifies = true; bool cmdPicAndText = true;
+	if (!bindDesc.IsOk() || !ResolveCommand(bindDesc, cmdCaption, cmdPicture, &cmdModifies, nullptr, &cmdPicAndText)) {
+		// Bound to nothing (actionEvent is retired — the command is the sole binding), or to a command since gone: nothing
+		// to run (IsUnbound). Greyed under its own caption or else its name, with its own picture if it has one — the
+		// studio draws it so, to be bound again; where the form runs it is not drawn (ibValueCommandBar::Update).
+		entry.caption = GetCaption().IsEmpty() ? GetName() : GetCaption();
+		if (!IsEmptyPicture())
+			entry.picture = GetPictureDesc();
+		entry.representation = ibRepresentation::ibRepresentation_PictureAndText;
+		entry.enabled = false;
+		return true;
+	}
+	entry.caption = GetCaption().IsEmpty() ? cmdCaption : GetCaption();
+	entry.picture = IsEmptyPicture() ? cmdPicture : GetPictureDesc();
+	// The item's OWN Representation wins; left on Auto it takes the COMMAND's default (a standard action like Close /
+	// Update is picture-only, Add / Post is picture+text).
+	entry.representation = GetRepresentation();
+	if (entry.representation == ibRepresentation::ibRepresentation_Auto)
+		entry.representation = cmdPicAndText ? ibRepresentation::ibRepresentation_PictureAndText : ibRepresentation::ibRepresentation_Picture;
+	// A view-only form greys a command that changes data — its own form asked, the door's gate.
+	const ibValueForm* const form = GetCommandGateForm();
+	entry.enabled = IsEnabled() && !(cmdModifies && form != nullptr && form->IsViewOnly());
+	entry.isDefault = IsDefault();
+	entry.command = bindDesc;
+	return true;
+}
+
+//***********************************************************************
+//*                    Command bar SUBMENU (child)                      *
+//***********************************************************************
+
+ibValueFrame* ibValueCommandBarSubmenu::GetOwnerFrame() const
+{
+	const ibValueCommandBar* const bar = GetBar();
+	return bar != nullptr ? bar->GetOwnerFrame() : nullptr;
+}
+
+bool ibValueCommandBarSubmenu::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
+{
+	// Name must stay unique among the bar's commands and submenus.
+	const ibValueCommandBar* const bar = GetBar();
+	if (property == m_propertyName && bar != nullptr && bar->HasItemName(newValue.GetString(), this))
+		return false;
+	return true;
+}
+
+bool ibValueCommandBarSubmenu::GetCommandEntry(ibCommandEntry& entry) const
+{
+	// Hidden, or hidden by the feature options it names — none, with everything it holds.
+	if (!IsVisible() || !IsAvailable())
+		return false;
+	// Its caption empty: its name, so a new one is not a blank tool.
+	entry.caption = GetCaption().IsEmpty() ? GetName() : GetCaption();
+	if (!IsEmptyPicture())
+		entry.picture = GetPictureDesc();
+	entry.representation = GetRepresentation();
+	if (entry.representation == ibRepresentation::ibRepresentation_Auto)
+		entry.representation = ibRepresentation::ibRepresentation_PictureAndText;
+	entry.enabled = IsEnabled();
+	entry.tooltip = GetToolTip();
+	entry.kind = ibCommandEntryKind_Group;
+	entry.item = this;
+	// …and what it holds, each child's entry the same way, to any depth.
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
+		ibCommandEntry member;
+		if (GetChild(idx)->GetCommandEntry(member))
+			entry.members.push_back(std::move(member));
+	}
+	return true;
+}
+
+ibValueCommandBarItem* ibValueCommandBarSubmenu::AddCommandItem()
+{
+	return AddLayerChild<ibValueCommandBarItem>(this, ibT("Command"));
+}
+
+ibValueCommandBarSubmenu* ibValueCommandBarSubmenu::AddSubmenu()
+{
+	return AddLayerChild<ibValueCommandBarSubmenu>(this, ibT("Submenu"));
+}
+
+//***********************************************************************
+//*                    Command bar (its children)                       *
+//***********************************************************************
+
+ibValueCommandBarItem* ibValueCommandBar::AddCommandItem()
+{
+	return AddLayerChild<ibValueCommandBarItem>(this, ibT("Command"));
+}
+
+ibValueCommandBarSubmenu* ibValueCommandBar::AddSubmenu()
+{
+	return AddLayerChild<ibValueCommandBarSubmenu>(this, ibT("Submenu"));
+}
+
+bool ibValueCommandBar::HasItemName(const ibString& name, const ibValueLayerObject* except) const
+{
+	return HasName(this, name, except);
+}
+
+ibString ibValueCommandBar::GenerateItemName(const ibString& prefix) const
+{
+	for (int n = 1; ; ++n) {
+		const ibString name = ibString::Format(ibT("%s%d"), prefix, n);
+		if (!HasItemName(name))
+			return name;
+	}
 }
 
 //***********************************************************************
 //*                          Serialization                              *
 //***********************************************************************
 // The composite window writes a "Layers" block that holds the command bar (see window.cpp).
-// The bar writes its AutoFill flag + one sub-node per child command; each command writes its
-// own fields — same pattern a toolbar item uses.
+// The bar writes its AutoFill flag + one sub-node per child command or submenu (WriteChildren); each writes its
+// own fields — same pattern a toolbar item uses — and a submenu its children after them, the same way.
 
 bool ibValueCommandBarItem::WriteData(ibDataNode& node) const
 {
@@ -845,17 +976,40 @@ bool ibValueCommandBarItem::ReadData(const ibDataNode& node)
 	return true;
 }
 
+bool ibValueCommandBarSubmenu::WriteData(ibDataNode& node) const
+{
+	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
+	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
+	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
+	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+	node.SetProperty(m_propertyFeatureOptions->GetName(), m_propertyFeatureOptions->GetNodeValue());
+	WriteChildren(this, node);
+	return true;
+}
+
+bool ibValueCommandBarSubmenu::ReadData(const ibDataNode& node)
+{
+	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
+	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyFeatureOptions->SetNodeValue(node.GetProperty(m_propertyFeatureOptions->GetName()));
+	ReadChildren(this, node);
+	return true;
+}
+
 bool ibValueCommandBar::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAutoFill->GetName(), m_propertyAutoFill->GetNodeValue());
 	node.SetProperty(m_propertyShowSearch->GetName(), m_propertyShowSearch->GetNodeValue());
-	// One child sub-node per command, in order. clsid 0 + index — the read side iterates
-	// Children() positionally, so only the order matters, not the node type/identity.
-	ibMetaID idx = 0;
-	for (const auto& item : m_items) {
-		if (item != nullptr)
-			item->WriteData(node.AddChild(0, idx++));
-	}
+	// One child sub-node per command or submenu, in order, each of its type — a submenu holding its own.
+	WriteChildren(this, node);
 	return true;
 }
 
@@ -864,11 +1018,7 @@ bool ibValueCommandBar::ReadData(const ibDataNode& node)
 	m_propertyAutoFill->SetNodeValue(node.GetProperty(m_propertyAutoFill->GetName()));
 	// A bar written before the flag was has none, and keeps the default — on.
 	m_propertyShowSearch->SetNodeValue(node.GetProperty(m_propertyShowSearch->GetName()));
-	m_items.clear();
-	for (const ibDataNode& child : node.Children()) {
-		ibValueCommandBarItem* item = AddCommandItem();   // creates + SetBar; ReadData overwrites the name
-		item->ReadData(child);
-	}
+	ReadChildren(this, node);
 	return true;
 }
 
@@ -879,6 +1029,7 @@ bool ibValueCommandBar::ReadData(const ibDataNode& node)
 // A runtime value must be registered. It is a SYSTEM type (clsid = system_to_clsid("CommandBar")).
 SYSTEM_TYPE_REGISTER(ibValueCommandBar, "CommandBar");
 SYSTEM_TYPE_REGISTER(ibValueCommandBarItem, "CommandBarItem");
+SYSTEM_TYPE_REGISTER(ibValueCommandBarSubmenu, "CommandBarSubmenu", g_commandBarSubmenuCLSID);
 
 void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 {

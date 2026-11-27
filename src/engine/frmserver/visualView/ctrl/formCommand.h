@@ -44,6 +44,7 @@ public:
 	// --- ibValueLayerObject ---
 	virtual ibValueFrame* GetOwnerFrame() const override;   // → the owner form (metadata + studio routing)
 	virtual bool IsLayerContainer() const override { return false; }   // a leaf — no children
+	virtual ibString GetName() const override { return m_propertyName->GetValueAsString(); }
 
 	// --- value identity ---
 	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }   // registered value type
@@ -58,7 +59,6 @@ public:
 
 	// The command's own look / behaviour (a projection reads these; its own Title/Picture win on top). The Action
 	// is the event whose VALUE names the form-runtime handler the command runs:
-	ibString GetName()      const { return m_propertyName->GetValueAsString(); }
 	// The fully qualified name, the SAME scheme metaobject commands use (see ibValueMetaObject::GetFullName) — a
 	// form command is rooted at the form: "Form.<name>". One naming rule for menu, sections and form.
 	ibString GetFullName()  const { return ibT("Form.") + GetName(); }

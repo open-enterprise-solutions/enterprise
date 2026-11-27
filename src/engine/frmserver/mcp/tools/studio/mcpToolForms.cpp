@@ -50,6 +50,8 @@
 #include "frmserver/visualView/ctrl/formCommand.h"     // …and what the form can DO
 #include "frmserver/visualView/layers/commandBar.h"    // GatherFormCommands — the commands a button may run, as offered
 
+#include <functional>   // std::function — a submenu described as the bar is, to any depth
+
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
 
@@ -482,7 +484,9 @@ public:
 			"And its COMMAND BAR as a person will see it (`commandBar`): the standard actions, the "
 			"object's own commands, and each CommandGroup of the category FormCommandBar as ONE entry "
 			"with its `submenu` - the object's commands filed under it and the shared commands typed "
-			"for the object this form shows.");
+			"for the object this form shows; then the commands added to the bar by hand, and each "
+			"Submenu added there the same way: one entry, its `submenu` the entries under it, to any "
+			"depth.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -574,37 +578,36 @@ public:
 
 		// ⭐ THE COMMAND BAR AS IT WILL STAND — built by the bar itself (BuildCommands, the very call the toolbar is
 		// filled from), so what is read here is what a person will see: the standard actions, the object's own
-		// commands, and a COMMAND GROUP of the form command bar as ONE entry carrying its submenu. Each submenu
-		// line is resolved through the bar's door, the same resolve the menu is drawn with.
+		// commands, the author's commands, and a GROUP — the author's submenu, a command group of the form command
+		// bar — as ONE entry carrying its submenu: its entries the same way, to any depth.
 		if (ibValueCommandBar* bar = form->GetCommandBar()) {
-			std::vector<ibDataValue> entries;
-			for (const ibCommandEntry& entry : bar->BuildCommands()) {
-				if (entry.id == ibNOT_FOUND)
-					continue;   // a separator
+			const std::function<std::vector<ibDataValue>(const std::vector<ibCommandEntry>&)> describe =
+				[&describe](const std::vector<ibCommandEntry>& commands) {
+				std::vector<ibDataValue> entries;
+				for (const ibCommandEntry& entry : commands) {
+					// A separator; and a command of the author's with nothing to run, which no person sees where the form runs.
+					if (entry.id == ibNOT_FOUND || entry.IsUnbound())
+						continue;
 
-				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-				node->SetValue(ibT("caption"), entry.caption);
-				node->SetValue(ibT("kind"), ibString(entry.kind == ibCommandEntryKind_Group ? ibT("group")
-					: entry.kind == ibCommandEntryKind_QuickFilter ? ibT("quickFilter") : ibT("command")));
-				if (!entry.enabled)
-					node->AddField(ibT("enabled"), ibDataValue::Bool(false));
+					std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+					node->SetValue(ibT("caption"), entry.caption);
+					node->SetValue(ibT("kind"), ibString(entry.kind == ibCommandEntryKind_Group ? ibT("group")
+						: entry.kind == ibCommandEntryKind_QuickFilter ? ibT("quickFilter") : ibT("command")));
+					if (!entry.enabled)
+						node->AddField(ibT("enabled"), ibDataValue::Bool(false));
 
-				if (entry.kind == ibCommandEntryKind_Group) {
-					node->AddField(ibT("picture"), ibDataValue::Bool(!entry.picture.IsEmptyPicture()));
-					if (!entry.tooltip.IsEmpty())
-						node->SetValue(ibT("tooltip"), entry.tooltip);
-					std::vector<ibDataValue> submenu;
-					for (const ibValueCommandBarItem* member : entry.members) {
-						ibString caption; ibPictureDescription picture;
-						if (member != nullptr && bar->ResolveCommand(member->GetBindingDesc(), caption, picture))
-							submenu.push_back(ibDataValue::String(caption));
+					if (entry.kind == ibCommandEntryKind_Group) {
+						node->AddField(ibT("picture"), ibDataValue::Bool(!entry.picture.IsEmptyPicture()));
+						if (!entry.tooltip.IsEmpty())
+							node->SetValue(ibT("tooltip"), entry.tooltip);
+						node->AddField(ibT("submenu"), ibDataValue::Array(describe(entry.members)));
 					}
-					node->AddField(ibT("submenu"), ibDataValue::Array(submenu));
-				}
 
-				entries.push_back(ibDataValue::Child(node));
-			}
-			result.AddField(ibT("commandBar"), ibDataValue::Array(entries));
+					entries.push_back(ibDataValue::Child(node));
+				}
+				return entries;
+			};
+			result.AddField(ibT("commandBar"), ibDataValue::Array(describe(bar->BuildCommands())));
 		}
 
 		// WHICH OF THE TWO THIS IS, asked of the metaobject rather than guessed

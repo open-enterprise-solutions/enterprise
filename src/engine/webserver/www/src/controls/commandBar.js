@@ -1,7 +1,7 @@
 // A COMMAND BAR — the State's CommandBar of a form, a table, a spreadsheet (protocol.h, ibCommandBar): its entries, a
-// separator, a group whose commands are its children. An entry pressed goes back as its owner's event Command {Id};
-// one command of a group, {Id, Member} — its place among the group's. Drawn as the owner's first child, ahead of its
-// controls, and carrying no control id: the folding of the controls leaves it where it is.
+// separator, a group whose entries are its children — a command, or a group of its own, to any depth. An entry pressed
+// goes back as its owner's event Command {Id} — its own id, wherever it stands. Drawn as the owner's first child, ahead
+// of its controls, and carrying no control id: the folding of the controls leaves it where it is.
 //
 // ONE LINE, AND WHAT DOES NOT FIT GOES UNDER », as on the thin client's bar (wxAuiToolBar's overflow button): the
 // entries past the bar's end are hidden and offered in the menu of its last button, in their order.
@@ -128,19 +128,36 @@ export class CommandBar {
 		const trigger = this.button(entry);
 		trigger.slot = 'trigger';
 		trigger.setAttribute('with-caret', '');
-		dropdown.append(trigger);
-		(entry.NodeChildren ?? []).forEach((member, place) => {
-			const item = document.createElement('wa-dropdown-item');
-			item.textContent = member.Caption || member.Tooltip || '';
-			item.toggleAttribute('disabled', member.Enabled === false);
-			item.value = String(member.Position ?? place);
-			dropdown.append(item);
-		});
+		dropdown.append(trigger, ...CommandBar.groupItems(entry.NodeChildren ?? []));
 		dropdown.addEventListener('wa-select', (event) => {
-			const member = Number(/** @type {any} */ (event).detail.item.value);
-			this.owner.send(EventKind.Command, { Id: entry.Id, Member: member });
+			const value = /** @type {any} */ (event).detail.item.value;
+			if (value)
+				this.owner.send(EventKind.Command, { Id: Number(value) });
 		});
 		return dropdown;
+	}
+
+	/**
+	 * A group's entries as a dropdown's items — a bar's group, a button's (its State's Members): a command by its own id,
+	 * a group of them an item whose submenu holds its own, to any depth.
+	 * @param {ProtocolNode[]} entries
+	 * @returns {HTMLElement[]}
+	 */
+	static groupItems(entries) {
+		return entries.filter((entry) => !entry.Separator).map((entry) => {
+			const item = document.createElement('wa-dropdown-item');
+			item.textContent = entry.Caption || entry.Tooltip || '';
+			item.toggleAttribute('disabled', entry.Enabled === false);
+			if (entry.Kind === group) {
+				for (const member of CommandBar.groupItems(entry.NodeChildren ?? [])) {
+					member.slot = 'submenu';
+					item.append(member);
+				}
+			}
+			else
+				/** @type {any} */ (item).value = String(entry.Id);
+			return item;
+		});
 	}
 
 	/** The » at the bar's end, its menu filled by fit(). */
@@ -163,31 +180,34 @@ export class CommandBar {
 	}
 
 	/**
-	 * The menu's lines for the entries past the bar's end: a command, a group as its caption with its commands under
-	 * it — as the window's menu draws one — and a separator between them.
+	 * The menu's lines for the entries past the bar's end: a command, a group as its caption with its entries under
+	 * it, a step further in at each depth — as the window's menu draws one — and a separator between them.
 	 * @param {ProtocolNode[]} entries
 	 */
 	overflowItems(entries) {
 		/** @type {HTMLElement[]} */
 		const items = [];
+		/** @param {ProtocolNode} entry @param {number} depth */
+		const line = (entry, depth) => {
+			const command = entry.Kind === group ? undefined : { Id: entry.Id };
+			const item = this.overflowItem(entry, command);
+			if (command === undefined)
+				item.toggleAttribute('disabled', true);
+			if (depth > 0)
+				item.style.paddingInlineStart = `${depth}em`;
+			items.push(item);
+			if (entry.Kind === group)
+				for (const member of entry.NodeChildren ?? [])
+					if (!member.Separator)
+						line(member, depth + 1);
+		};
 		for (const entry of entries) {
 			if (entry.Separator) {
 				if (items.length > 0 && items[items.length - 1].localName !== 'wa-divider')
 					items.push(document.createElement('wa-divider'));
 				continue;
 			}
-			if (entry.Kind !== group) {
-				items.push(this.overflowItem(entry, { Id: entry.Id }));
-				continue;
-			}
-			const caption = this.overflowItem(entry, undefined);
-			caption.toggleAttribute('disabled', true);
-			items.push(caption);
-			(entry.NodeChildren ?? []).forEach((member, place) => {
-				const item = this.overflowItem(member, { Id: entry.Id, Member: member.Position ?? place });
-				item.style.paddingInlineStart = '1em';
-				items.push(item);
-			});
+			line(entry, 0);
 		}
 		if (items.length > 0 && items[items.length - 1].localName === 'wa-divider')
 			items.pop();
@@ -196,7 +216,7 @@ export class CommandBar {
 
 	/**
 	 * @param {ProtocolNode} entry
-	 * @param {{Id: number, Member?: number} | undefined} command what goes back when it is chosen
+	 * @param {{Id: number} | undefined} command what goes back when it is chosen
 	 */
 	overflowItem(entry, command) {
 		const item = document.createElement('wa-dropdown-item');

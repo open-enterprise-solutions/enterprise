@@ -18,6 +18,8 @@
 
 #include <wx/imaglist.h>
 
+#include <functional>   // std::function — a submenu's commands under it, to any depth
+
 namespace {
 
 // The form as the tree shows it — each control, its class and name, nested as they are. The control is said by its
@@ -37,13 +39,20 @@ bool HasCommandBar(const ibProtocolNode& node)
 	return node.FindChild(ibProtocol::ibForm::ibState::State).Has(ibProtocol::ibForm::ibCommandBar::CommandBar);
 }
 
-// …and the commands of each control's bar, as its node has them: one added, removed, moved or renamed is drawn too.
+// …and the commands and submenus of each control's bar, as its node has them — each by its type and name, a submenu's
+// under it: one added, removed, moved or renamed at any depth is drawn too.
 void ShapeOf(const ibProtocolNode& node, wxString& shape)
 {
 	if (HasCommandBar(node)) {
+		const std::function<void(const ibProtocolNode&)> items = [&shape, &items](const ibProtocolNode& holder) {
+			for (const ibProtocolNode& item : holder.Children()) {
+				shape << item.GetType() << wxT(':') << item.GetString(ibProtocol::ibForm::Name) << wxT('[');
+				items(item);
+				shape << wxT(']');
+			}
+		};
 		shape << node.GetInt(ibProtocol::ibForm::ControlId) << wxT('{');
-		for (const ibProtocolNode& item : node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers).FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar).Children())
-			shape << item.GetString(ibProtocol::ibForm::Name) << wxT(';');
+		items(node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers).FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar));
 		shape << wxT('}');
 	}
 	for (const ibProtocolNode& child : node.Children())
@@ -165,20 +174,35 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddComman
 		GetPictureIndex(ibProtocol::ibView::ibFormDesigner::CommandBar), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(bar.get()));
 	m_layerItemMap[bar.get()] = barNode;   // the bar node — re-selectable by identity after a rebuild
 
-	// Its commands as sub-nodes — remembered too, so a just-added / moved command can be re-selected after the rebuild.
-	const std::vector<ibProtocolNode> items = bar->GetNode().Children();
-	for (unsigned int idx = 0; idx < items.size(); idx++) {
-		std::unique_ptr<ibValueCommandBarItem>& item = m_commandBarItems[{ controlId, idx }];
-		if (item == nullptr)
-			item.reset(new ibValueCommandBarItem(m_formHandler, controlId, idx));
-		const wxTreeItemId itemNode = m_tree->AppendItem(barNode, items[idx].GetString(ibProtocol::ibView::ibFormDesigner::Name),
-			GetPictureIndex(ibProtocol::ibView::ibFormDesigner::CommandBarItem), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(item.get()));
-		m_layerItemMap[item.get()] = itemNode;
-	}
-
-	// Open, so a freshly added command is visible without a manual expand (the desktop's default) — unless it was closed.
-	if (!items.empty() && bar->IsTreeExpanded())
-		m_tree->Expand(barNode);
+	// Its commands and submenus as sub-nodes, a submenu's under it, to any depth — remembered too, by their paths, so a
+	// just-added / moved one can be re-selected after the rebuild. A holder kept at a path whose node is now of the other
+	// kind is made anew.
+	const std::function<void(const ibProtocolNode&, const std::vector<unsigned int>&, const wxTreeItemId&, const ibValueLayerObject*)> addItems =
+		[&](const ibProtocolNode& holder, const std::vector<unsigned int>& under, const wxTreeItemId& holderNode, const ibValueLayerObject* holderLayer) {
+		const std::vector<ibProtocolNode> items = holder.Children();
+		for (unsigned int idx = 0; idx < items.size(); idx++) {
+			std::vector<unsigned int> path = under;
+			path.push_back(idx);
+			const bool submenu = items[idx].GetType() == ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu;
+			std::unique_ptr<ibValueCommandBarItem>& item = m_commandBarItems[{ controlId, path }];
+			if (item == nullptr || item->GetClassName() != items[idx].GetType()) {
+				// …the one of the other kind let go of first where it is shown, as a gone one is (RebuildTree).
+				if (item != nullptr && objectInspector != nullptr && objectInspector->GetSelectedObject() == item.get())
+					objectInspector->SelectObject(nullptr);
+				item.reset(submenu ? new ibValueCommandBarSubmenu(m_formHandler, controlId, path) : new ibValueCommandBarItem(m_formHandler, controlId, path));
+			}
+			const wxTreeItemId itemNode = m_tree->AppendItem(holderNode, items[idx].GetString(ibProtocol::ibView::ibFormDesigner::Name),
+				GetPictureIndex(submenu ? ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu : ibProtocol::ibView::ibFormDesigner::CommandBarItem),
+				wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(item.get()));
+			m_layerItemMap[item.get()] = itemNode;
+			if (submenu)
+				addItems(items[idx], path, itemNode, item.get());
+		}
+		// Open, so a freshly added command is visible without a manual expand (the desktop's default) — unless it was closed.
+		if (!items.empty() && holderLayer->IsTreeExpanded())
+			m_tree->Expand(holderNode);
+	};
+	addItems(bar->GetNode(), {}, barNode, bar.get());
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::UpdateItem(const wxTreeItemId& row, ibValueFrame* control)
@@ -213,10 +237,11 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::CreateTre
 	for (const ibProtocolNode& described : classes.Children())
 		add(described.GetString(ibProtocol::ibView::ibFormDesigner::Name), ibProtocolPicture(described, ibProtocol::ibView::ibFormDesigner::Picture));
 
-	// The command bar and its command — the engine's pictures, not a class the server describes (the desktop's were its
-	// toolbar's and tool's).
+	// The command bar, its command and its submenu — the engine's pictures, not a class the server describes (the
+	// desktop's were its toolbar's and tool's); a submenu is drawn as a group of commands is.
 	add(ibProtocol::ibView::ibFormDesigner::CommandBar, ibBackendPicture::GetPicture(g_picCommandBarCLSID));
 	add(ibProtocol::ibView::ibFormDesigner::CommandBarItem, ibBackendPicture::GetPicture(g_picCommandBarItemCLSID));
+	add(ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu, ibBackendPicture::GetPicture(g_picCommandGroupNormalCLSID));
 
 	// The tree owns the list, and lets go of the one it had.
 	m_tree->AssignImageList(pictures);
@@ -338,9 +363,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCom
 	SelectItemData(GetItemData(found->second));
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCommandItem(long long controlId, unsigned int index)
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCommandItem(long long controlId, const std::vector<unsigned int>& path)
 {
-	const auto found = m_commandBarItems.find({ controlId, index });
+	const auto found = m_commandBarItems.find({ controlId, path });
 	if (found != m_commandBarItems.end())
 		SelectCommandItem(found->second.get());
 }

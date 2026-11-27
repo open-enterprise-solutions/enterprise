@@ -2,8 +2,10 @@
 // picture where its PictureLocation puts it (on the left; 2 on the right; 3 a TILE: the picture large over the caption
 // and the State's Note under them, the button filling its cell - one for a finger), drawn as its View says (1 a
 // HYPERLINK: no face and no frame, the caption underlined); pressed back as event Press. A button of a group of
-// commands (State's Members) opens them, and one picked is Press {Member} — its place among the group's.
+// commands (State's Members — entries as a bar's group has) opens them as a bar's group is opened, and one picked is
+// Command {Id}, as on a bar.
 
+import { CommandBar } from './commandBar.js';
 import { Control, EventKind, defineControl } from './control.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
@@ -91,15 +93,11 @@ class Button extends Control {
 		const dropdown = document.createElement('wa-dropdown');
 		button.slot = 'trigger';
 		button.setAttribute('with-caret', '');
-		dropdown.append(button);
-		for (const member of members) {
-			const item = document.createElement('wa-dropdown-item');
-			item.textContent = member.Caption ?? '';
-			item.value = String(member.Member);
-			dropdown.append(item);
-		}
+		dropdown.append(button, ...CommandBar.groupItems(members));
 		dropdown.addEventListener('wa-select', (event) => {
-			this.send(EventKind.Press, { Member: Number(/** @type {any} */ (event).detail.item.value) });
+			const value = /** @type {any} */ (event).detail.item.value;
+			if (value)
+				this.send(EventKind.Command, { Id: Number(value) });
 		});
 		this.replaceChildren(dropdown);
 		return true;

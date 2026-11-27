@@ -109,7 +109,7 @@ void ibValueForm::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	if (!m_lockBadgeHolder.IsEmpty())
 		state.SetValue(ibProtocol::ibForm::ibState::LockedBy, m_lockBadgeHolder);
 	if (HasCommandBar())
-		GetCommandBar()->Update(state.Child(ibProtocol::ibForm::ibCommandBar::CommandBar));
+		GetCommandBar()->Update(state.Child(ibProtocol::ibForm::ibCommandBar::CommandBar), host);
 }
 
 //**********************************************************************************

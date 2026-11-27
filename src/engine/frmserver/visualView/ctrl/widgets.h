@@ -32,7 +32,7 @@ class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	// modifies data on a view-only form.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
-	// Press — the bound command runs; with Member, one command of its group.
+	// Press — the bound command runs; Command {Id}, one command of its group.
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	//support icons
@@ -53,13 +53,14 @@ private:
 
 	// The press — runs the bound command.
 	void OnButtonPressed();
-	// …and when the bound command is a GROUP, the press on one of its leaves: `member` is the leaf's place
-	// in the order the frame listed them (WalkGroup). A group runs nothing by itself.
-	void OnButtonPressed(size_t member);
+	// …and when the bound command is a GROUP, the press on one of its leaves: `id` is the one the frame wrote on
+	// it, its place in the order the frame listed them (WalkGroup). A group runs nothing by itself.
+	void OnButtonPressed(size_t id);
 
-	// ⭐ THE GROUP'S SUBMENU, walked ONCE for both ends: the frame (`node` given — the tree with captions and
-	// pictures by their ids, a nested group as a sub-node, a leaf carrying its `Member` place) and the press (`node`
-	// null — only the leaves, in the same order). Two walks would be two orders, and a press would run a neighbour.
+	// ⭐ THE GROUP'S SUBMENU, walked ONCE for both ends: the frame (`node` given — the tree as a command bar's group
+	// entries, captions and pictures by their ids, a nested group a Group entry, a leaf carrying its Id — its place)
+	// and the press (`node` null — only the leaves, in the same order). Two walks would be two orders, and a press
+	// would run a neighbour.
 	void WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCommandSubItem>& subs,
 		std::vector<ibCommandDescription>& leaves, ibDataNode* node) const;
 

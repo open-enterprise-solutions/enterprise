@@ -33,7 +33,15 @@
 
 wxBEGIN_EVENT_TABLE(ibAnyButton, ibControl)
     EVT_PAINT(ibAnyButton::OnPaint)
+    EVT_MOUSE_CAPTURE_LOST(ibAnyButton::OnCaptureLost)
 wxEND_EVENT_TABLE()
+
+ibAnyButton::~ibAnyButton()
+{
+    // The buttons share one input handler, and it holds the one pressed: the mouse it captured. Destroyed under the
+    // button, the button takes it with it - left with the handler, the next release went to the freed button.
+    GetStdInputHandler(nullptr)->StopPressing(this);
+}
 
 void ibAnyButton::Press()
 {
@@ -89,11 +97,16 @@ bool ibAnyButton::PerformAction(const ibControlAction& action,
 }
 
 /* static */
-ibInputHandler *ibAnyButton::GetStdInputHandler(ibInputHandler *handlerDef)
+ibStdAnyButtonInputHandler *ibAnyButton::GetStdInputHandler(ibInputHandler *handlerDef)
 {
     static ibStdAnyButtonInputHandler s_handlerBtn(handlerDef);
 
     return &s_handlerBtn;
+}
+
+ibInputHandler *ibAnyButton::DoGetStdInputHandler(ibInputHandler *handlerDef)
+{
+    return GetStdInputHandler(handlerDef);
 }
 
 // ----------------------------------------------------------------------------
@@ -179,6 +192,13 @@ void ibAnyButton::OnPaint(wxPaintEvent& WXUNUSED(event))
     dc.SetFont(GetFont());
     dc.SetTextForeground(GetForegroundColour());
     GetRenderer()->DrawButtonLabel(dc, label, m_bitmap, rectLabel, GetStateFlags(), GetAlignment(), GetAccelIndex());
+}
+
+// The mouse taken away while the button is held: no release will come to click it, so it stops being pressed now.
+// Otherwise the handler keeps this button as the pressed one, and the next release elsewhere goes to it.
+void ibAnyButton::OnCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event))
+{
+    GetStdInputHandler(nullptr)->StopPressing(this);
 }
 
 // ============================================================================
@@ -310,4 +330,19 @@ bool ibStdAnyButtonInputHandler::HandleActivation(ibInputConsumer *consumer,
     // the default button changes appearance when the app is [de]activated, so
     // return true to refresh
     return wxStaticCast(consumer->GetInputWindow(), ibAnyButton)->IsDefault();
+}
+
+void ibStdAnyButtonInputHandler::StopPressing(ibInputConsumer *consumer)
+{
+    // one window at a time is held: another one has nothing to stop here
+    if ( m_winCapture == nullptr || m_winCapture != consumer->GetInputWindow() )
+        return;
+
+    // return everything to the normal state; a capture already taken away is not released again
+    if ( m_winCapture->HasCapture() )
+        m_winCapture->ReleaseMouse();
+    m_winCapture = nullptr;
+    m_winHasMouse = false;
+
+    consumer->PerformAction(ibACTION_BUTTON_RELEASE);
 }

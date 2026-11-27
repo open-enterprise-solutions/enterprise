@@ -27,42 +27,6 @@
 
 namespace {
 
-// The ids a context menu's commands take — their places among its commands, a group's included, after the first.
-constexpr int kFirstEntryId = wxID_HIGHEST + 1;
-
-// THE CONTEXT MENU'S ENTRIES into `menu` — a group's as its submenu; each command's id kept in `ids` by its place, its
-// key written after its caption (as a menu writes it, past a tab), and a command about the current cell (CurrentCell)
-// saying that cell after its caption — «Find: Customer - Store 2».
-void AppendContextEntries(wxMenu& menu, const std::vector<ibProtocolNode>& entries, const wxString& cell,
-	std::vector<long long>& ids)
-{
-	for (const ibProtocolNode& entry : entries) {
-		wxString caption = entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption);
-		wxMenuItem* item = nullptr;
-		if (entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) == static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group)) {
-			ibMenu* const submenu = new ibMenu;
-			AppendContextEntries(*submenu, entry.Children(), cell, ids);
-			item = menu.AppendSubMenu(submenu, caption);
-		}
-		else {
-			if (entry.GetBool(ibProtocol::ibForm::ibCommandBar::CurrentCell, false) && !cell.empty()) {
-				wxString shown = cell;
-				shown.Replace(wxT("&"), wxT("&&"));   // the cell's text, not a mnemonic
-				caption << wxT(": ") << shown;
-			}
-			const wxString shortcut = entry.GetString(ibProtocol::ibForm::ibCommandBar::Shortcut);
-			if (!shortcut.empty())
-				caption << wxT('\t') << shortcut;
-			item = menu.Append(kFirstEntryId + static_cast<int>(ids.size()), caption);
-			ids.push_back(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id));
-			item->Enable(entry.GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
-		}
-		const wxBitmap picture = ibProtocolPicture(entry, ibProtocol::ibForm::ibCommandBar::Picture);
-		if (picture.IsOk())
-			item->SetBitmap(picture);
-	}
-}
-
 // The context menu's command whose key `key` is — enabled, a group's too: its id in `id`. False when none has it.
 bool FindShortcut(const std::vector<ibProtocolNode>& entries, const wxKeyEvent& key, long long& id)
 {
@@ -776,11 +740,11 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 
 	ibMenu menu;
 	std::vector<long long> ids;
-	AppendContextEntries(menu, entries, cell, ids);
+	ibViewCommandBar::AppendEntries(menu, entries, cell, ids);
 	const int chosen = m_dataView->GetPopupMenuSelectionFromUser(menu, event.GetPosition());
 	if (chosen == wxID_NONE)
 		return;
-	const std::size_t idx = static_cast<std::size_t>(chosen - kFirstEntryId);
+	const std::size_t idx = static_cast<std::size_t>(chosen - ibViewCommandBar::kFirstEntryId);
 	if (idx >= ids.size())
 		return;
 

@@ -158,7 +158,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnLeftClickFrom
 		const ibProtocolNode entry = bar->FindEntryByPosition(bar->GetWindow()->ScreenToClient(wxGetMousePosition()));
 		if (entry.Has(ibProtocol::ibForm::ibCommandBar::Position))
 			m_formHandler->GetObjectTree()->SelectCommandItem(barOwner->GetControlID(),
-				static_cast<unsigned int>(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Position)));
+				{ static_cast<unsigned int>(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Position)) });
 		else
 			m_formHandler->SelectObject(barOwner);
 		return true;

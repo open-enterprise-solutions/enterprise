@@ -185,11 +185,8 @@ bool ibValueFrame::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibData
 		GetCommandBar()->Search(args.GetValue<ibString>(ibProtocol::ibEvent::Text));
 		return true;
 	}
-	const ibActionID id = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Id);
-	if (args.Has(ibProtocol::ibEvent::Member))
-		GetCommandBar()->ExecuteCommand(id, static_cast<size_t>(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Member)));
-	else
-		GetCommandBar()->ExecuteCommand(id, GetOwnerForm());
+	// The entry's own id, wherever it stands — on the bar or in a submenu at any depth.
+	GetCommandBar()->ExecuteCommand(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Id), GetOwnerForm());
 	return true;
 }
 

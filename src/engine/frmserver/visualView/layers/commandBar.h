@@ -14,8 +14,13 @@
 
 class ibValueFrame;
 class ibValueForm;
+class ibValueCommandBar;
 class ibValueCommandBarItem;
 class ibDataNode;   // serialize/dataBuilder.h — universal node (layer -> node)
+
+// A submenu's node among the bar's children is of its type (ibValueCommandBar::WriteData) — what tells it from a command
+// when read back, here and in the studio.
+constexpr ibClassID g_commandBarSubmenuCLSID = system_to_clsid("CommandBarSubmenu");
 
 //********************************************************************************************
 //*                            Command bar STORE (a form LAYER)                              *
@@ -28,7 +33,8 @@ class ibDataNode;   // serialize/dataBuilder.h — universal node (layer -> node
 // ⭐⭐ WHAT A BAR ENTRY IS — and there are three answers, which is why this is a KIND and not a flag.
 // A COMMAND stands for something to DO; a QUICK FILTER stands for a filter LINE the author marked
 // «quick access», and clicking it edits that line's value rather than running anything; a GROUP stands
-// for a command group of the form command bar, and clicking it opens a submenu of its commands.
+// for a submenu — the author's, a command group of the form command bar, a group of standard actions — and
+// clicking it opens its entries.
 //
 // The kind is asked in exactly two places — the click (which door it opens) and the caption (a
 // filter shows its value) — and nowhere else has to care, because all are entries on one bar.
@@ -47,22 +53,31 @@ struct ibCommandEntry {
 	// The bar's default command, drawn standing out: an item's Default, or the action's own (an object form's
 	// «… and close», AutoFill).
 	bool                    isDefault;
-	ibValueCommandBarItem*  item;
+	// What the author put on the bar for it — a command or a submenu; nullptr for a standard action and an object's
+	// command.
+	const ibValueLayerObject* item;
+	// …and WHAT IT RUNS, for a command of the author's (its binding) or of an object (its metaId, one hop): pressed, it is
+	// walked from the bar's door. None — a standard action, run by its id (CallAsAction); a group runs nothing.
+	ibCommandDescription    command;
 	ibCommandEntryKind      kind;
 	// …and WHICH filter line, for a quick filter: its index among the top-level nodes of the
 	// setting in force. An index rather than a pointer because the settings are rebuilt under the
 	// bar (a refetch, another variant), and a pointer into a vector dies the moment one is added.
 	size_t                  filterLine;
-	// …and WHAT IS UNDER IT, for a group: one transient item per command, in the order they were gathered —
-	// owned by the bar's AutoFill set (m_autoItems), rebuilt with it. Empty for every other kind.
-	std::vector<ibValueCommandBarItem*> members;
+	// …and WHAT IS UNDER IT, for a group: its entries in order, each with an id of its own — a command, or a group of its
+	// own, to any depth. A press names the entry, wherever it stands. Empty for every other kind.
+	std::vector<ibCommandEntry> members;
 	// The hint on the tool. Empty: the caption.
 	ibString                tooltip;
 	ibCommandEntry() : id(ibNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), isDefault(false),
 		item(nullptr), kind(ibCommandEntryKind_Command), filterLine(0) {}
-	ibCommandEntry(const ibActionID& i, const ibString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr)
+	ibCommandEntry(const ibActionID& i, const ibString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, const ibValueLayerObject* it = nullptr)
 		: id(i), caption(c), picture(p), representation(r), enabled(en), isDefault(false), item(it),
 		  kind(ibCommandEntryKind_Command), filterLine(0) {}
+
+	// A command of the author's with nothing alive to run — bound to nothing, or to a command since gone: the studio
+	// draws it greyed, so it can be bound again; where the form runs it is not drawn, and pressed it runs nothing.
+	bool IsUnbound() const { return item != nullptr && kind == ibCommandEntryKind_Command && !command.IsOk(); }
 };
 
 // One CHILD command of the bar — a LEAF layer object (ibValueLayerObject). Manual commands (AutoFill
@@ -77,7 +92,6 @@ public:
 	// (the owner frame's form). WalkCommand (the backend receiver's validate) is inherited from the door.
 	virtual ibValueForm* GetCommandGateForm() const override;
 
-	ibString GetName() const { ibString s; m_propertyName->GetValueAsString(s); return s; }
 	void SetName(const ibString& name) { m_propertyName->SetValue(name); }
 	ibString GetCaption() const { return m_propertyCaption->GetValueAsTranslateString(); }
 	void SetCaption(const ibString& caption) { m_propertyCaption->SetValue(caption); }
@@ -108,22 +122,15 @@ public:
 	void SetCommandDesc(const ibCommandDescription& desc, const ibString& display = ibEmptyString) { m_propertyCommand->SetValue(desc, display); }
 	const ibCommandDescription& GetCommandDesc() const { return m_propertyCommand->GetValueAsCommandDesc(); }
 
-	// legacy command accessors — the AutoFill transient items set a plain command metaId; it flows into the
-	// command source as a 1-hop [metaId] path.
-	ibMetaID GetCommandMetaId() const {
-		const ibCommandDescription d = m_propertyCommand->GetValueAsCommandDesc();
-		return d.IsOk() ? d.GetLeaf() : ibNOT_FOUND;
-	}
-	void SetCommandMetaId(const ibMetaID& id) { m_propertyCommand->SetValue(ibCommandDescription(id)); }
-
-	// The bar this item belongs to — set on add; routes the studio refresh + name uniqueness,
-	// and is the Action picker's source (the owner frame's action collection).
-	void SetBar(class ibValueCommandBar* bar) { m_bar = bar; }
-	class ibValueCommandBar* GetBar() const { return m_bar; }
-
-	// ibValueLayerObject — leaf, routes through the bar's owner frame.
+	// ibValueLayerObject — leaf, routes through the bar's owner frame (GetBar — the bar it hangs under, or a submenu of
+	// it: the studio refresh, the name uniqueness, the Action picker's source).
 	virtual ibValueFrame* GetOwnerFrame() const override;
 	virtual bool IsLayerContainer() const override { return false; }
+	virtual ibString GetName() const override { ibString s; m_propertyName->GetValueAsString(s); return s; }
+	// …its entry: the command it is bound to, as that command shows (ResolveCommand — the one resolve every projection
+	// shares), its own caption, picture and representation on top. Hidden or unavailable — none; bound to nothing alive —
+	// one that runs nothing (IsUnbound), greyed under its caption or else its name.
+	virtual bool GetCommandEntry(ibCommandEntry& entry) const override;
 
 	// ibValue / ibPropertyObject concrete requirements specific to the item.
 	virtual ibString GetString() const override { return GetCaption(); }
@@ -134,12 +141,10 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
 	// Serialization — the item's own fields (mirrors a toolbar item's Read/WriteData).
-	bool WriteData(ibDataNode& node) const;
-	bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const override;
+	virtual bool ReadData(const ibDataNode& node) override;
 
 private:
-
-	class ibValueCommandBar* m_bar = nullptr;
 
 	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("Command"), _("Command"));
 	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, ibT("Name"), _("Name"),
@@ -173,11 +178,82 @@ private:
 		_("The feature options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
 };
 
+// ⭐ A SUBMENU OF THE BAR — what the author makes to hold commands and further submenus, to any depth, as a group holds
+// controls: a dropdown on the bar, a nested menu under one. A CONTAINER as the bar is; its children are the bar's two
+// kinds, added by the bar's two verbs.
+class FRMSERVER_API ibValueCommandBarSubmenu : public ibValueLayerObject {
+public:
+
+	virtual ~ibValueCommandBarSubmenu() {}
+
+	// ibValueLayerObject — a container, routing through the bar's owner frame.
+	virtual ibValueFrame* GetOwnerFrame() const override;
+	virtual bool IsLayerContainer() const override { return true; }
+	virtual bool IsTreeExpanded() const override { return m_treeExpanded; }
+	virtual void SetTreeExpanded(bool value) override { m_treeExpanded = value; }
+	virtual ibString GetName() const override { ibString s; m_propertyName->GetValueAsString(s); return s; }
+	// …its entry: a group, its caption its name while it has none of its own, its children's entries under it. Hidden or
+	// unavailable — none, with all it holds.
+	virtual bool GetCommandEntry(ibCommandEntry& entry) const override;
+
+	// Serialization — its own fields, then its children as the bar writes its own.
+	virtual bool WriteData(ibDataNode& node) const override;
+	virtual bool ReadData(const ibDataNode& node) override;
+
+	// ibValue / ibPropertyObject concrete requirements specific to the submenu.
+	virtual ibString GetString() const override { return GetCaption(); }
+	virtual ibString GetClassName() const override { return ibT("CommandBarSubmenu"); }
+	virtual ibString GetObjectTypeName() const override { return ibT("CommandBarSubmenu"); }
+	virtual bool IsEditable() const override { return true; }
+	// Reject a duplicate Name — one namespace with the bar's commands and submenus.
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
+
+	void SetName(const ibString& name) { m_propertyName->SetValue(name); }
+	ibString GetCaption() const { return m_propertyCaption->GetValueAsTranslateString(); }
+	ibRepresentation GetRepresentation() const { return m_propertyRepresentation->GetValueAsEnum(); }
+	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
+	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
+	ibString GetToolTip() const { return m_propertyTooltip->GetValueAsTranslateString(); }
+	bool IsEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
+	bool IsVisible() const { return m_propertyVisible->GetValueAsBoolean(); }
+	// Available by the feature options it names, as an item is — off, it is dropped with all it holds.
+	bool IsAvailable() const { return m_propertyFeatureOptions->IsAvailable(); }
+
+	// What it holds — the bar's two verbs: a new command, a new submenu, last, under a name free on the whole bar.
+	ibValueCommandBarItem* AddCommandItem();
+	ibValueCommandBarSubmenu* AddSubmenu();
+
+private:
+
+	bool m_treeExpanded = true;   // studio tree node open-state
+
+	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("Submenu"), _("Submenu"));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, ibT("Name"), _("Name"),
+		_("The submenu's name, unique among the command bar's commands and submenus. It identifies the submenu in the studio; the user never sees it."), _("Submenu"));
+	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, ibT("Caption"), _("Caption"),
+		_("The submenu's caption on the bar, or in the menu that holds it. Empty: its name. Can be written per language."), ibT(""));
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_category, ibT("Representation"), _("Representation"),
+		_("What the submenu shows on the bar: text, picture, or both. Auto: both."),
+		ibRepresentation::ibRepresentation_Auto);
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_category, ibT("Picture"), _("Picture"),
+		_("The submenu's icon. Empty: none."));
+	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, ibT("Tooltip"), _("Tooltip"),
+		_("The hint on the submenu's tool. Empty: its caption."), ibEmptyString);
+	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("Enabled"), _("Enabled"),
+		_("Whether the submenu can be opened. Off: it is shown greyed out."), true);
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("Visible"), _("Visible"),
+		_("Whether the submenu is shown, with everything it holds."), true);
+	// USER VISIBILITY — a group of its own, as on a command of the bar.
+	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(ibT("UserVisibility"), _("User visibility"));
+	ibPropertyFeatureOptions* m_propertyFeatureOptions = ibPropertyObject::CreateProperty<ibPropertyFeatureOptions>(m_categoryUserVisibility, ibT("FeatureOptions"), _("Feature options"),
+		_("The feature options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
+};
+
 // A command bar is a CONTAINER layer object (ibValueLayerObject) — NOT a control; it is PART OF a
 // control (a form LAYER the frame owns), rendered as a toolbar over the content. It CONSISTS OF
 // commands (m_commands, built from AutoFill or the child items) plus the AutoFill flag. A frame
 // OWNS one via ibValuePtr and points it back at itself (SetOwner). The host reads BuildCommands().
-class ibValueCommandBar : public ibValueLayerObject, public ibFrontendCommandReceiver {
+class FRMSERVER_API ibValueCommandBar : public ibValueLayerObject, public ibFrontendCommandReceiver {
 public:
 
 	virtual ~ibValueCommandBar() {}
@@ -185,48 +261,20 @@ public:
 	// The control that owns this bar — its action collection feeds AutoFill.
 	void SetOwner(ibValueFrame* owner) { m_owner = owner; }
 	virtual ibValueFrame* GetOwnerFrame() const override { return m_owner; }
+	virtual const ibValueCommandBar* GetBar() const override { return this; }
 	virtual bool IsLayerContainer() const override { return true; }
 
 	// ibFrontendCommandReceiver gate — the bar IS-A command door; the walk starts at the owner frame's form.
 	virtual ibValueForm* GetCommandGateForm() const override;
 
-	// Child COMMANDS (runtime items). Added via the studio; the manual set (AutoFill off).
-	// Inline so the studio (separate module) links without exporting the symbol.
-	ibValueCommandBarItem* AddCommandItem() {
-		ibValueCommandBarItem* item = new ibValueCommandBarItem();
-		item->SetBar(this);
-		item->SetName(GenerateItemName());
-		m_items.emplace_back(item);
-		return item;
-	}
-	void RemoveCommandItem(ibValueCommandBarItem* item) {
-		for (size_t i = 0; i < m_items.size(); ++i)
-			if (m_items[i] == item) { m_items.erase(m_items.begin() + i); return; }
-	}
-	// Reorder — swap with the neighbour (up = towards the front).
-	void MoveCommandItem(ibValueCommandBarItem* item, bool up) {
-		for (size_t i = 0; i < m_items.size(); ++i) {
-			if (m_items[i] != item) continue;
-			const size_t j = up ? (i > 0 ? i - 1 : i) : (i + 1 < m_items.size() ? i + 1 : i);
-			if (j != i) { ibValuePtr<ibValueCommandBarItem> t = m_items[i]; m_items[i] = m_items[j]; m_items[j] = t; }
-			return;
-		}
-	}
-	bool HasItemName(const ibString& name, const ibValueCommandBarItem* except = nullptr) const {
-		for (const auto& it : m_items) {
-			if (it != nullptr && it != except && it->GetName() == name)
-				return true;
-		}
-		return false;
-	}
-	ibString GenerateItemName() const {
-		for (int n = 1; ; ++n) {
-			const ibString name = ibString::Format(ibT("Command%d"), n);
-			if (!HasItemName(name)) return name;
-		}
-	}
-	unsigned int GetCommandItemCount() const { return static_cast<unsigned int>(m_items.size()); }
-	ibValueCommandBarItem* GetCommandItem(unsigned int idx) const { return idx < m_items.size() ? (ibValueCommandBarItem*)m_items[idx] : nullptr; }
+	// Child COMMANDS and SUBMENUS — the bar's children (GetChild, GetChildCount, RemoveChild), a submenu's under it.
+	// Added via the studio; the manual set (AutoFill off). A new one goes last, under a name free on the whole bar.
+	ibValueCommandBarItem* AddCommandItem();
+	ibValueCommandBarSubmenu* AddSubmenu();
+	// Whether a command or a submenu ANYWHERE on the bar is called `name` — one namespace, as a form's controls have one.
+	bool HasItemName(const ibString& name, const ibValueLayerObject* except = nullptr) const;
+	// The first `<prefix>N` no command or submenu of the bar is called: "Command" for a command, "Submenu" for a submenu.
+	ibString GenerateItemName(const ibString& prefix) const;
 
 	// Container tree open-state — mirrors a control's expand flag. Open by default so a freshly
 	// added command is visible without a manual expand.
@@ -248,40 +296,30 @@ public:
 	const std::vector<ibCommandEntry>& BuildCommands();
 
 	// Dispatch a command (by id) — routed to the owner's CallAsAction. This is the
-	// bar's OWN event hook, so the client need not know about the control.
+	// bar's OWN event hook, so the client need not know about the control. The id is the entry's wherever it stands —
+	// on the bar or in a submenu at any depth; a group runs nothing by itself.
 	void ExecuteCommand(const ibActionID& id, class ibBackendValueForm* form);
-	// …and one command of a GROUP: the entry `id` is the group, `member` the command's place among its members
-	// as the frame listed them. A group runs nothing by itself.
-	void ExecuteCommand(const ibActionID& id, size_t member);
 	// …and its search field typed into: the text handed to its owner, which looks for it (ibValueFrame::SetSearchText —
 	// a form passes it on to its command view). A bar showing no field takes nothing.
 	void Search(const ibString& text);
 
 	// ⭐ THE BAR AS IT STANDS NOW, one child of `state` per entry in order: a separator, or a command with its
-	// caption and picture as the representation chooses them, whether it is enabled, its tooltip, its kind —
-	// and for a group, its members with the same, greyed where a view-only form forbids a command that changes
-	// data. Everything a client needs to draw the bar and its submenus without asking again — the pictures by their
-	// ids (ibBackendPicture::SendPicture). And, ShowSearch on, its search field: `Search` holding the text.
-	void Update(ibDataNode& state);
+	// caption and picture as the representation chooses them, its id, whether it is enabled, its tooltip, its kind —
+	// and for a group, its entries under it the same way, to any depth, greyed where a view-only form forbids a
+	// command that changes data. Everything a client needs to draw the bar and its submenus without asking again —
+	// the pictures by their ids (ibBackendPicture::SendPicture). An entry the author put on the bar itself says its
+	// place among the bar's children (Position — what the studio selects it by); one with nothing to run (IsUnbound) is
+	// drawn by the studio's host alone. And, ShowSearch on, its search field: `Search` holding the text.
+	void Update(ibDataNode& state, class ibVisualHost* host);
 
-	// Reverse-lookup the child that produced the command with this id (built by BuildCommands).
-	// nullptr for an AutoFill command (no child). Used by the studio to select on tool click.
-	ibValueCommandBarItem* FindItemByCommandId(const ibActionID& id) const {
-		for (const ibCommandEntry& c : m_commands)
-			if (c.id == id) return c.item;
-		return nullptr;
-	}
-	// The entry built for this id — what the toolbar asks before deciding what a click means (a group opens its
-	// submenu). nullptr when the id is not one of this bar's.
-	const ibCommandEntry* FindEntry(const ibActionID& id) const {
-		for (const ibCommandEntry& c : m_commands)
-			if (c.id == id) return &c;
-		return nullptr;
-	}
+	// The entry built for this id, on the bar or in a submenu at any depth — what a click is resolved by (a group opens
+	// its submenu). nullptr when the id is not one of this bar's.
+	const ibCommandEntry* FindEntry(const ibActionID& id) const;
 
-	// Serialization — the AutoFill and ShowSearch flags + the child command items (each as a sub-node).
-	bool WriteData(ibDataNode& node) const;
-	bool ReadData(const ibDataNode& node);
+	// Serialization — the AutoFill and ShowSearch flags + the children (each as a sub-node of its type: a submenu's
+	// g_commandBarSubmenuCLSID, holding its own).
+	virtual bool WriteData(ibDataNode& node) const override;
+	virtual bool ReadData(const ibDataNode& node) override;
 
 	// ibValue / ibPropertyObject concrete requirements specific to the bar.
 	virtual ibString GetString() const override { return _("Command bar"); }
@@ -304,8 +342,6 @@ private:
 
 	ibValueFrame*               m_owner = nullptr;
 	std::vector<ibCommandEntry> m_commands;
-	std::vector<ibValuePtr<ibValueCommandBarItem>> m_items;   // child COMMANDS (runtime)
-	std::vector<ibValuePtr<ibValueCommandBarItem>> m_autoItems; // TRANSIENT AutoFill items for the owner object's own commands — rebuilt each BuildCommands, never serialized
 	bool                        m_treeExpanded = true;        // studio tree node open-state
 
 	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("CommandBar"), _("Command bar"));

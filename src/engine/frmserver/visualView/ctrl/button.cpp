@@ -86,7 +86,8 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	else if (cmdModifies && ownerForm != nullptr && ownerForm->IsViewOnly())
 		state.SetField(ibProtocol::ibForm::ibState::Enabled, ibDataValue::Bool(false));
 
-	// A GROUP command opens its sub-commands (groups nest) — the client draws the submenu from these.
+	// A GROUP command opens its sub-commands (groups nest) — the client draws the submenu from these, entries as a command
+	// bar's group has (ibCommandBar), and one picked comes back as a bar's does: Command {Id}.
 	std::vector<ibFrontendCommandReceiver::ibCommandSubItem> subs;
 	if (cmdResolved && ResolveSubCommands(cmdDesc, subs)) {
 		std::vector<ibCommandDescription> leaves;
@@ -100,17 +101,19 @@ void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCom
 	for (const ibFrontendCommandReceiver::ibCommandSubItem& sub : subs) {
 		ibDataNode* member = node != nullptr ? &node->AddChild(0, 0) : nullptr;
 		if (member != nullptr) {
-			member->SetValue(ibProtocol::ibForm::ibButton::Caption, sub.caption);
+			member->SetValue(ibProtocol::ibForm::ibCommandBar::Caption, sub.caption);
 			if (!sub.picture.IsEmptyPicture())
-				member->SetValue(ibProtocol::ibForm::ibButton::Picture, ibBackendPicture::SendPicture(sub.picture, GetMetaData()));
+				member->SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(sub.picture, GetMetaData()));
 		}
 		std::vector<ibFrontendCommandReceiver::ibCommandSubItem> nested;
 		if (ResolveSubCommands(sub.desc, nested)) {   // a GROUP -> its own submenu
+			if (member != nullptr)
+				member->SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(ibProtocol::ibForm::ibCommandBar::ibKind::Group));
 			WalkGroup(nested, leaves, member);
 			continue;
 		}
-		if (member != nullptr)                        // a LEAF -> a place the press names
-			member->SetValue(ibProtocol::ibForm::ibButton::Member, static_cast<std::int32_t>(leaves.size()));
+		if (member != nullptr)                        // a LEAF -> the id the press names: its place among the leaves
+			member->SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<std::int32_t>(leaves.size()));
 		leaves.push_back(sub.desc);
 	}
 }

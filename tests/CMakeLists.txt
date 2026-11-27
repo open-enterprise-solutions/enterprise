@@ -66,6 +66,7 @@ add_executable(oes_tests
     test_formFieldChoice.cpp
     test_formField.cpp
     test_formLayout.cpp
+    test_commandBarSubmenu.cpp
     test_formStatic.cpp
     test_formTableColumn.cpp
     test_module_manager_split.cpp

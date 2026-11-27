@@ -67,12 +67,20 @@ public:
 
 wxBEGIN_EVENT_TABLE(ibCheckBox, ibControl)
     EVT_PAINT(ibCheckBox::OnPaint)
+    EVT_MOUSE_CAPTURE_LOST(ibCheckBox::OnCaptureLost)
 wxEND_EVENT_TABLE()
 
 void ibCheckBox::Init()
 {
     m_isPressed = false;
     m_status = Status_Unchecked;
+}
+
+ibCheckBox::~ibCheckBox()
+{
+    // A box is pressed by the buttons' input handler (its own hands the mouse on to it), which holds the one pressed and
+    // the mouse it captured: destroyed under the button, the box takes it with it, as a button does.
+    ibButton::GetStdInputHandler(nullptr)->StopPressing(this);
 }
 
 bool ibCheckBox::Create(wxWindow *parent,
@@ -152,6 +160,12 @@ ibCheckBox::State ibCheckBox::GetState(int flags) const
         return State_Current;
     else
         return State_Normal;
+}
+
+// The mouse taken away while the box is held: it stops being pressed now (ibAnyButton::OnCaptureLost).
+void ibCheckBox::OnCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event))
+{
+    ibButton::GetStdInputHandler(nullptr)->StopPressing(this);
 }
 
 void ibCheckBox::OnPaint(wxPaintEvent& WXUNUSED(event))

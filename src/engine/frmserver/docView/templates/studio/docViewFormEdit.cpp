@@ -334,6 +334,36 @@ const ibControlMenuItem s_controlMenu[] = {
 	{ ibProtocol::ibForm::ibType::ColumnLayout, ibProtocol::ibForm::ibType::ColumnLayout, ibTRANSLATE("Add column group") },
 };
 
+// The rows of each command and submenu under `holder` (a bar, a submenu), at any depth, into `rows` — each by its name,
+// one namespace on the bar.
+void WriteCommandBarRows(const ibValueLayerObject* holder, ibFormID controlId, ibDataNode& rows)
+{
+	for (unsigned int idx = 0; idx < holder->GetChildCount(); idx++) {
+		ibValueLayerObject* const child = holder->GetChild(idx);
+		ibDataNode& childRows = rows.AddChild(0, 0);
+		childRows.SetValue(ibProtocol::ibView::ibFormDesigner::Name, child->GetName());
+		ibPropertyInspector inspector;
+		inspector.SelectObject(child, controlId, 0);
+		inspector.OnDraw(childRows);
+		if (child->IsLayerContainer())
+			WriteCommandBarRows(child, controlId, rows);
+	}
+}
+
+// …and a new one's rows, `key` — those of `added`, which the bar makes to be written and takes off again — with the node
+// it is (Node), of its type: the client adds it in the control's node as it is.
+void WriteCommandBarTemplate(ibValueCommandBar* bar, ibValueLayerObject* added, ibFormID controlId, ibDataNode& described, const char* key)
+{
+	ibDataNode& rows = described.Child(key);
+	ibPropertyInspector inspector;
+	inspector.SelectObject(added, controlId, 0);
+	inspector.OnDraw(rows);
+	ibDataNode& node = rows.Child(ibProtocol::ibView::ibFormDesigner::Node);
+	node.SetClsid(added->GetClassType());
+	added->WriteData(node);
+	bar->RemoveChild(added);
+}
+
 } // namespace
 
 void ibFormDesignView::WriteClasses(ibDataNode& response)
@@ -380,10 +410,10 @@ void ibFormDesignView::WriteRows(ibValueFrame* control, ibDataNode& controls)
 		inspector.OnDraw(described);
 	}
 
-	// …and its command bar's — the desktop's "Command interface" node: the bar's rows, each command's of it by its name
-	// (Items — what its command is called, its picture: the desktop's inspector read them off the command itself), and a
-	// new command's with the node it is (AddCommandItem). The commands are the client's to add, in the control's node; a
-	// command made here to be written is taken off again.
+	// …and its command bar's — the desktop's "Command interface" node: the bar's rows, each command's and submenu's of it
+	// at any depth by its name (Items — what its command is called, its picture: the desktop's inspector read them off the
+	// command itself), and a new command's and a new submenu's with the node each is (AddCommandItem, AddSubmenu). They
+	// are the client's to add, in the control's node; one made here to be written is taken off again.
 	if (control->HasCommandBar()) {
 		ibValueCommandBar* const bar = control->GetCommandBar();
 		ibDataNode& barRows = described.Child(ibProtocol::ibView::ibFormDesigner::CommandBar);
@@ -392,26 +422,9 @@ void ibFormDesignView::WriteRows(ibValueFrame* control, ibDataNode& controls)
 			inspector.SelectObject(bar, control->GetControlID(), 0);
 			inspector.OnDraw(barRows);
 		}
-		ibDataNode& commandRows = barRows.Child(ibProtocol::ibView::ibFormDesigner::Items);
-		for (unsigned int idx = 0; idx < bar->GetCommandItemCount(); idx++) {
-			ibValueCommandBarItem* const item = bar->GetCommandItem(idx);
-			if (item == nullptr)
-				continue;
-			ibDataNode& itemRows = commandRows.AddChild(0, 0);
-			itemRows.SetValue(ibProtocol::ibView::ibFormDesigner::Name, item->GetName());
-			ibPropertyInspector inspector;
-			inspector.SelectObject(item, control->GetControlID(), 0);
-			inspector.OnDraw(itemRows);
-		}
-		ibValueCommandBarItem* const item = bar->AddCommandItem();
-		{
-			ibDataNode& itemRows = described.Child(ibProtocol::ibView::ibFormDesigner::CommandBarItem);
-			ibPropertyInspector inspector;
-			inspector.SelectObject(item, control->GetControlID(), 0);
-			inspector.OnDraw(itemRows);
-			item->WriteData(itemRows.Child(ibProtocol::ibView::ibFormDesigner::Node));
-		}
-		bar->RemoveCommandItem(item);
+		WriteCommandBarRows(bar, control->GetControlID(), barRows.Child(ibProtocol::ibView::ibFormDesigner::Items));
+		WriteCommandBarTemplate(bar, bar->AddCommandItem(), control->GetControlID(), described, ibProtocol::ibView::ibFormDesigner::CommandBarItem);
+		WriteCommandBarTemplate(bar, bar->AddSubmenu(), control->GetControlID(), described, ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu);
 	}
 }
 

@@ -5,16 +5,12 @@
 
 #include "widgets.h"
 
-#include <functional>
-
+#include "frmclient/visualView/commandBar.h"   // ibViewCommandBar::AppendEntries — a group's menu, as a bar's
 #include "frmclient/win/picture.h"
 #include "deskgui/univ/ctrl/button.h"
 #include "deskgui/univ/menu.h"
 
 namespace {
-
-// The ids a group's popup gives its commands — each the command's place among the group's, as the press names it.
-constexpr int kFirstMemberId = wxID_HIGHEST + 1;
 
 // A tile's picture, in DIP: twice the 16 of a button's - the engine's masters have four times to give. Handed to wx at
 // this size and at twice it, as a bundle: wx draws the one the window's DPI asks for, scaled no further.
@@ -85,34 +81,21 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 		return;
 	}
 
-	// A GROUP is picked from — its commands, groups nesting as submenus; a command is named by its place among all the
-	// group's commands, in the order they are written.
-	int next = kFirstMemberId;
-	std::function<void(ibMenu*, const ibProtocolNode&)> fill = [&fill, &next](ibMenu* into, const ibProtocolNode& members) {
-		for (const ibProtocolNode& member : members.Children()) {
-			const wxString caption = member.GetString(ibProtocol::ibForm::ibButton::Caption);
-			if (!member.Children().empty()) {
-				ibMenu* const submenu = new ibMenu();
-				fill(submenu, member);
-				into->AppendSubMenu(submenu, caption);
-				continue;
-			}
-			wxMenuItem* const item = into->Append(next++, caption);   // the menu makes its own item (ibMenuItem)
-			const wxBitmap picture = ibProtocolPicture(member, ibProtocol::ibForm::ibButton::Picture);
-			if (picture.IsOk())
-				item->SetBitmap(picture);
-		}
-	};
-
+	// A GROUP is picked from as a bar's group is — its entries, groups nesting as submenus; the command picked is sent by
+	// the id the server wrote on it.
 	ibMenu menu;
-	fill(&menu, m_members);
+	std::vector<long long> ids;
+	ibViewCommandBar::AppendEntries(menu, m_members.Children(), wxString(), ids);
 	const int chosen = m_button->GetPopupMenuSelectionFromUser(menu, wxPoint(0, m_button->GetSize().GetHeight()));
 	if (chosen == wxID_NONE)
 		return;
+	const std::size_t place = static_cast<std::size_t>(chosen - ibViewCommandBar::kFirstEntryId);
+	if (place >= ids.size())
+		return;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocol::ibEvent::Member, chosen - kFirstMemberId);
-	Send(ibProtocol::ibEvent::ibKind::Press, args);
+	args.SetValue(ibProtocol::ibEvent::Id, ids[place]);
+	Send(ibProtocol::ibEvent::ibKind::Command, args);
 }
 
 CONTROL_REGISTER(ibValueButton, ibProtocol::ibForm::ibType::Button)

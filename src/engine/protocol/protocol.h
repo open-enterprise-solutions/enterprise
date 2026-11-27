@@ -458,8 +458,7 @@ namespace ibProtocol {
 		inline constexpr const char* Args     = "Args";
 		// …the Args a control's event carries:
 		inline constexpr const char* Id       = "Id";         // Command, Action: the command's
-		inline constexpr const char* Member   = "Member";     // Command, Press: one command of a group, by its place in it;
-		                                                      // Change: a switch's item, by its place among its Choices
+		inline constexpr const char* Member   = "Member";     // Change: a switch's item, by its place among its Choices
 		inline constexpr const char* Text     = "Text";       // Change, Search, Find
 		inline constexpr const char* Down     = "Down";       // Find: looked for below the current row (false — above it)
 		inline constexpr const char* MatchCase = "MatchCase"; // Find: the case as written (false — aside)
@@ -477,8 +476,9 @@ namespace ibProtocol {
 
 		enum class ibKind : int {
 			Focus   = 1,    // the control became the active one
-			Command = 2,    // an entry of its command bar pressed (Id; Member — one command of a group)
-			Press   = 3,    // a button pressed (Member — one command of its group, by its place among the group's commands)
+			Command = 2,    // an entry of its command bar pressed (Id — the entry's, on the bar or in a submenu), or of
+			                // a button's group (Id — the one its Members wrote)
+			Press   = 3,    // a button pressed: its command runs
 			Input   = 4,    // typing started in a field: nothing committed, the object is modified; in a cell — its editor opened
 			Change  = 5,    // a field's text committed (Text) — a cell's, and its edit is over
 			Select  = 6,    // a field's Select button
@@ -1323,8 +1323,9 @@ namespace ibProtocol {
 		}
 
 		// A COMMAND BAR — the State's CommandBar of a form, a table, a spreadsheet: its entries (Id, Caption, Picture,
-		// Tooltip, Enabled, Default, Kind; a separator; a group's commands as its children, Position each), pressed back
-		// as event Command {Id, Member}; a table's ContextMenu, its standard commands, the same (Id, Caption, Picture,
+		// Tooltip, Enabled, Default, Kind; a separator; a group's entries as its children, the same way, to any depth;
+		// Position — one the author put on the bar itself), pressed back as event Command {Id}; a table's ContextMenu,
+		// its standard commands, the same (Id, Caption, Picture,
 		// Enabled, Shortcut, CurrentCell; a group — Kind, its commands as its children, a submenu), picked back as Action
 		// {Id} after the cell it was opened on (Row {Row, Column}). Saved in its control's node's Layers
 		// (ibValueWindowComposite::WriteData).
@@ -1343,7 +1344,8 @@ namespace ibProtocol {
 			inline constexpr const char* Enabled    = "Enabled";
 			inline constexpr const char* Default    = "Default";    // the bar's default command: drawn standing out
 			inline constexpr const char* Kind       = "Kind";       // ibKind
-			inline constexpr const char* Position   = "Position";   // a group's command's: its place among the group's
+			inline constexpr const char* Position   = "Position";   // a command or submenu of the bar's own: its place
+			                                                        // among the bar's children (the studio selects it by it)
 			inline constexpr const char* Shortcut   = "Shortcut";   // a table's menu command's key, as a menu writes it
 			                                                        // ("Ctrl+Alt+F"): pressed on the table, it is chosen
 			inline constexpr const char* CurrentCell = "CurrentCell";   // a table's menu command about the cell the cursor
@@ -1354,20 +1356,18 @@ namespace ibProtocol {
 			enum class ibKind : int {
 				Command     = 0,   // a command: pressed, it runs
 				QuickFilter = 1,   // a filter by a value: pressed, the server asks for the value
-				Group       = 2,   // a group: its commands are its children, one of them pressed (Member — its place
-				                   // among them)
+				Group       = 2,   // a group, a submenu: its entries are its children, each with its own Id — a command,
+				                   // or a group of its own; the one pressed goes back by its Id
 			};
 
 		}
 
-		// A button's group of commands — its State's Members, each Caption, Picture, Member (its place), pressed back as
-		// event Press {Member}.
+		// A button's group of commands — its State's Members: entries as a command bar's group has (ibCommandBar — Id,
+		// Caption, Picture; a group of them Kind Group, its own under it), the one picked pressed back as a bar's is,
+		// event Command {Id}.
 		namespace ibButton {
 
 			inline constexpr const char* Members = "Members";
-			inline constexpr const char* Member  = "Member";
-			inline constexpr const char* Caption = "Caption";
-			inline constexpr const char* Picture = "Picture";
 
 		}
 

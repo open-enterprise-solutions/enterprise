@@ -1672,6 +1672,10 @@ msgstr "Вибрати джерело"
 msgid "Add command"
 msgstr "Додати команду"
 
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1198
+msgid "Add submenu"
+msgstr "Додати підменю"
+
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1143
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1208
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:612
@@ -17373,6 +17377,39 @@ msgstr "Чи є елемент командою панелі за замовчу
 #: src/engine/frmserver/visualView/layers/commandBar.h:168
 msgid "The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the application."
 msgstr "Команда, яку виконує елемент: команда форми, стандартна команда форми або однієї з її таблиць чи команда об'єкта форми або застосунку."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:230
+#: src/engine/frmserver/visualView/layers/commandBar.h:232
+msgid "Submenu"
+msgstr "Підменю"
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:232
+msgid "The submenu's name, unique among the command bar's commands and submenus. It identifies the submenu in the studio; the user never sees it."
+msgstr "Ім'я підменю, унікальне серед команд і підменю командної панелі. Воно ідентифікує підменю в Application Studio; користувач його ніколи не бачить."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:234
+msgid "The submenu's caption on the bar, or in the menu that holds it. Empty: its name. Can be written per language."
+msgstr "Заголовок підменю на панелі або в меню, яке його містить. Якщо порожньо, використовується його ім'я. Можна задати для кожної мови."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:236
+msgid "What the submenu shows on the bar: text, picture, or both. Auto: both."
+msgstr "Що показує підменю на панелі: текст, картинку або те й інше. Авто: те й інше."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:239
+msgid "The submenu's icon. Empty: none."
+msgstr "Значок підменю. Якщо порожньо, значка немає."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:241
+msgid "The hint on the submenu's tool. Empty: its caption."
+msgstr "Підказка на кнопці підменю. Якщо порожньо, використовується його заголовок."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:243
+msgid "Whether the submenu can be opened. Off: it is shown greyed out."
+msgstr "Чи можна відкрити підменю. Вимкнено: воно показується сірим."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:245
+msgid "Whether the submenu is shown, with everything it holds."
+msgstr "Чи показується підменю разом з усім, що в ньому."
 
 #: src/engine/frmserver/visualView/layers/commandBar.h:278
 #: src/engine/frmserver/visualView/layers/commandBar.h:302

@@ -35,6 +35,7 @@ class ibFormDragItem;          // one polymorphic draggable KIND — format + (d
 class ibValueLayerObject;
 class ibValueCommandBar;
 class ibValueCommandBarItem;
+class ibValueCommandBarSubmenu;
 
 // THE DESKTOP'S FORM EDITOR (designer/win/editor/visualEditor/visualEditor.h) IN A TAB THE SERVER RAISED. ⭐ THE CLIENT
 // EDITS THE FORM, THE SERVER HOLDS IT (Max, 2026-10-15): the tab's answer brings the form whole — its node as a frame
@@ -282,9 +283,9 @@ public:
 		ibValueLayerObject* FindEntry(long long controlId) const;
 
 		// THE DESKTOP'S SelectCommandItem — a layer's node selected after an edit of it, the inspector showing it: the
-		// holder, or a control's command by its place (one just added, pasted, moved).
+		// holder, or a control's command or submenu by its path among the bar's (one just added, pasted, moved).
 		void SelectCommandItem(const ibValueLayerObject* layer);
-		void SelectCommandItem(long long controlId, unsigned int index);
+		void SelectCommandItem(long long controlId, const std::vector<unsigned int>& path);
 
 	private:
 
@@ -294,7 +295,7 @@ public:
 		// it, its children the control's in their order (the host lays each in at its place).
 		void AddControl(ibValueFrame* control, const ibProtocolNode& node, const wxTreeItemId& parent);
 		// The desktop's "Command interface" node under a control with a command bar (its node's state carries it) — its
-		// commands under it, as its node has them (Layers, CommandBar).
+		// commands and submenus under it, a submenu's under that, as its node has them (Layers, CommandBar).
 		void AddCommandBar(ibValueFrame* obj, const ibProtocolNode& node, const wxTreeItemId& parent);
 
 		// The row says the control's name and class; the selected control's row is selected.
@@ -325,10 +326,10 @@ public:
 		std::map<ibValueFrame*, wxTreeItemId> m_controlItems;
 		std::map<wxString, int> m_pictureIndex;
 
-		// THE LAYERS' HOLDERS — a control's command bar by the control's id, a command of it by the id and its place:
-		// made as the tree is built, kept by those while it is built anew, gone with the node.
+		// THE LAYERS' HOLDERS — a control's command bar by the control's id, a command or a submenu of it by the id and its
+		// path: made as the tree is built, kept by those while it is built anew, gone with the node.
 		std::map<long long, std::unique_ptr<ibValueCommandBar>> m_commandBars;
-		std::map<std::pair<long long, unsigned int>, std::unique_ptr<ibValueCommandBarItem>> m_commandBarItems;
+		std::map<std::pair<long long, std::vector<unsigned int>>, std::unique_ptr<ibValueCommandBarItem>> m_commandBarItems;
 		std::map<const ibValueLayerObject*, wxTreeItemId> m_layerItemMap;
 
 		// The form as the tree last showed it — each control, its class and name in order, nested as they are: a draw
@@ -822,6 +823,7 @@ private:
 	friend class ::ibValueLayerObject;
 	friend class ::ibValueCommandBar;
 	friend class ::ibValueCommandBarItem;
+	friend class ::ibValueCommandBarSubmenu;
 };
 
 public:
@@ -1091,15 +1093,24 @@ protected:
 	// …each of its rows, the server's property (ibPropertySerializable).
 	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) override;
 
-	// The form as it stands with the command bar of this control given those commands — drawn by the server, a command
-	// the editor's; then the one at `selected` shown (wxNOT_FOUND: none).
-	void SetCommandItems(const std::vector<ibProtocolNode>& items, int selected) const;
+	// The form as it stands with the command bar of this control given those commands and submenus under the one at
+	// `under` (none: the bar itself) — each name free on the whole bar, drawn by the server, a command the editor's; then
+	// the one at `selected` shown (none: nothing).
+	void SetCommandItems(const std::vector<unsigned int>& under, const std::vector<ibProtocolNode>& items,
+		const std::vector<unsigned int>& selected) const;
+
+	// THE HOLDER'S MENU — the bar's, a submenu's: add a command, add a submenu, paste into it…
+	void PrepareHolderMenu(ibMenu* menu) const;
+	// …and the one chosen, for the holder at `under`: a new command or submenu (the server's — the desktop's
+	// AddCommandItem, AddSubmenu) or the one copied put last in it, and shown. False: the menu was none of those three.
+	bool ExecuteHolderMenu(const std::vector<unsigned int>& under, int menuId) const;
 
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_controlId;
 };
 
-// The control's command bar — the desktop's "Command interface" node: its AutoFill, and its commands under it.
+// The control's command bar — the desktop's "Command interface" node: its AutoFill, and its commands and submenus under
+// it.
 class ibValueCommandBar : public ibValueLayerObject {
 public:
 
@@ -1124,32 +1135,60 @@ private:
 	bool m_treeExpanded = true;
 };
 
-// A command of the bar — by its place among the bar's (its node's NodeChildren: the bar reads them in order).
+// A command of the bar — by its path among the bar's (each step its place among its holder's NodeChildren — the bar's,
+// a submenu's: the bar reads them in order).
 class ibValueCommandBarItem : public ibValueLayerObject {
 public:
 
-	ibValueCommandBarItem(ibVisualEditorNotebook::ibVisualEditor* formHandler, long long controlId, unsigned int index) :
-		ibValueLayerObject(formHandler, controlId), m_index(index) {
+	ibValueCommandBarItem(ibVisualEditorNotebook::ibVisualEditor* formHandler, long long controlId, const std::vector<unsigned int>& path) :
+		ibValueLayerObject(formHandler, controlId), m_path(path) {
 	}
 
 	virtual ibString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
 	virtual ibString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
 
-	// Its name stays unique among the bar's commands (the desktop's).
+	// Its name stays unique among the bar's commands and submenus (the desktop's).
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
 	virtual ibProtocolNode FindNode(const ibProtocolNode& control) const override;
-	// …a command's own, by its name, among its bar's (Items) — none such: a new command's (CommandBarItem).
+	// …its own, by its name, among its bar's (Items) — none such: a new one's of its kind (CommandBarItem,
+	// CommandBarSubmenu).
 	virtual ibProtocolNode FindRows(const ibProtocolNode& control) const override;
 
+	// Cut, copy, paste at its holder's end, delete, move within its holder, properties.
 	virtual void PrepareDefaultMenu(ibMenu* menu) const override;
 	virtual void ExecuteMenu(int menuId) override;
 
-	unsigned int GetIndex() const { return m_index; }
+	const std::vector<unsigned int>& GetPath() const { return m_path; }
 
 private:
 
-	const unsigned int m_index;
+	const std::vector<unsigned int> m_path;
+};
+
+// A submenu of the bar — the desktop's ibValueCommandBarSubmenu. Here a child of the bar as a command is — found by its
+// path, named, cut, copied and moved the same way — and a holder besides: a command and a submenu are added in it, and
+// pasted into it.
+class ibValueCommandBarSubmenu : public ibValueCommandBarItem {
+public:
+
+	ibValueCommandBarSubmenu(ibVisualEditorNotebook::ibVisualEditor* formHandler, long long controlId, const std::vector<unsigned int>& path) :
+		ibValueCommandBarItem(formHandler, controlId, path) {
+	}
+
+	virtual ibString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu; }
+	virtual ibString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarSubmenu; }
+
+	// Add command, add submenu, paste into it — then a command's.
+	virtual void PrepareDefaultMenu(ibMenu* menu) const override;
+	virtual void ExecuteMenu(int menuId) override;
+
+	virtual bool IsTreeExpanded() const override { return m_treeExpanded; }
+	virtual void SetTreeExpanded(bool value) override { m_treeExpanded = value; }
+
+private:
+
+	bool m_treeExpanded = true;
 };
 
 ///////////////////////////////////////////////////////////////////////////////

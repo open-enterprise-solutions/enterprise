@@ -157,8 +157,7 @@ ibScrollBar::~ibScrollBar()
     // The scrollbars share one input handler, and it holds the one pressed: the mouse it captured and the
     // timer that pages or steps while the button is down. Destroyed under the button, the scrollbar takes
     // both with it - left with the handler, the timer fired at the freed scrollbar (a dump of 2026-11-27).
-    if ( ibStdScrollBarInputHandler* const handler = dynamic_cast<ibStdScrollBarInputHandler*>(GetInputHandler()) )
-        handler->StopScrolling(this);
+    GetStdInputHandler(nullptr)->StopScrolling(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -739,8 +738,7 @@ void ibScrollBar::OnPaint(wxPaintEvent& WXUNUSED(event))
 // scrollbar answers a press.
 void ibScrollBar::OnCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event))
 {
-    if ( ibStdScrollBarInputHandler* const handler = dynamic_cast<ibStdScrollBarInputHandler*>(GetInputHandler()) )
-        handler->StopScrolling(this);
+    GetStdInputHandler(nullptr)->StopScrolling(this);
 }
 
 // ----------------------------------------------------------------------------
@@ -926,12 +924,17 @@ bool ibScrollBar::ScrollPages(int nPages)
 }
 
 /* static */
-ibInputHandler *ibScrollBar::GetStdInputHandler(ibInputHandler *handlerDef)
+ibStdScrollBarInputHandler *ibScrollBar::GetStdInputHandler(ibInputHandler *handlerDef)
 {
     static ibStdScrollBarInputHandler
         s_handler(ibThemeEngine::Get()->GetRenderer(), handlerDef);
 
     return &s_handler;
+}
+
+ibInputHandler *ibScrollBar::DoGetStdInputHandler(ibInputHandler *handlerDef)
+{
+    return GetStdInputHandler(handlerDef);
 }
 
 // ============================================================================
