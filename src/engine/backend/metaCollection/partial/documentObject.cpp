@@ -179,9 +179,10 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 		FillObject(*paParams[0]);
 		return true;
 	case eWrite:
+		// Code that names no mode posts regularly: a real-time posting re-dates the document, which code asks for.
 		WriteObject(
 			lSizeArray > 0 ? paParams[0]->ConvertToEnumValue<ibDocumentWriteMode>() : ibDocumentWriteMode::ibDocumentWriteMode_Write,
-			lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibDocumentPostingMode>() : ibDocumentPostingMode::ibDocumentPostingMode_RealTime
+			lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibDocumentPostingMode>() : ibDocumentPostingMode::ibDocumentPostingMode_Regular
 		);
 		return true;
 	case eDelete:

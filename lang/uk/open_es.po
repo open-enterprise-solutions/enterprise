@@ -6386,6 +6386,13 @@ msgstr "Провести"
 msgid "Clear posting"
 msgstr "Скасувати проведення"
 
+#: src/engine/backend/metaCollection/partial/documentAction.cpp:55
+#, c-format
+msgid ""
+"Post %s in real time?\n"
+"Yes: the document is dated by the current moment. No: its date stays as it is."
+msgstr "Провести %s оперативно?\nТак: документ отримає дату поточного моменту. Ні: дата залишиться попередньою."
+
 #: src/engine/backend/metaCollection/partial/documentEnum.h:49
 msgid "Posting"
 msgstr "Проведення"

@@ -3248,6 +3248,13 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		return false;
 	};
 
+	// A posting in real time is a posting NOW: the document takes the moment it is posted as its date before
+	// its handlers run, so BeforeWrite and Posting see the date its movements are written with. A regular
+	// posting keeps the date the document has — that is how one is posted back-dated.
+	if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting
+	    && postingMode == ibDocumentPostingMode::ibDocumentPostingMode_RealTime)
+		SetValueByMetaID(*GetMetaObject()->GetDocumentDate(), ibValueSystemFunction::CurrentDate());
+
 	{
 		ibValue cancel = false;
 		ExecAsEvent(ibT("BeforeWrite"), cancel,

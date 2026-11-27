@@ -4,8 +4,13 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "document.h"
-#include "backend/system/systemManager.h"   // ibValueSystemFunction::Alert
+#include "backend/system/systemManager.h"   // ibValueSystemFunction::Alert, CurrentDate — the day a posting is asked about
+#include "backend/session/session.h"        // ibSession::CurrentFrame — whom the posting mode is asked of
+#include "backend/backend_mainFrame.h"      // ibBackendDocFrame::ShowModalMessage
+#include "protocol/protocol.h"              // ibStyle — the question's buttons, and the one pressed
 #include "core/picturePredefined.h"       // g_picPostCLSID / g_picSaveCLSID — the command band
+
+#include <optional>
 
 enum action {
 	eDefActionAndClose = 1,
@@ -30,16 +35,49 @@ ibValueRecordDataObjectDocument::ibStandardCommandSet ibValueRecordDataObjectDoc
 	return documentActions;
 }
 
+namespace {
+
+// The mode a PERSON posts a document in — asked before the posting opens its transaction. A document dated
+// today may be posted in real time, taking the moment it is posted as its date, or regularly, keeping the
+// date it has: Yes is real time, No is regular, Cancel posts nothing. A document of another day is posted
+// regularly — that is how one is posted back-dated — and so is one posted where there is no window to ask in,
+// as the "save changes?" question of a closing form answers itself (docView.cpp).
+std::optional<ibDocumentPostingMode> AskPostingMode(const ibValueRecordDataObjectDocument& document)
+{
+	const ibDateTime date = document.GetValueByMetaID(*document.GetMetaObject()->GetDocumentDate()).GetDate();
+	const ibDateTime now = ibValueSystemFunction::CurrentDate().GetDate();
+	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
+	if (frame == nullptr || date.BeginOfPeriod(ibTotalsPeriod::Day) != now.BeginOfPeriod(ibTotalsPeriod::Day))
+		return ibDocumentPostingMode::ibDocumentPostingMode_Regular;
+
+	namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
+	switch (frame->ShowModalMessage(
+		ibString::Format(_("Post %s in real time?\nYes: the document is dated by the current moment. No: its date stays as it is."),
+			document.GetSourceCaption()),
+		ibString(),   // the client's own caption
+		style::YesNo | style::Cancel | style::IconQuestion | style::Centre)) {
+	case style::Yes: return ibDocumentPostingMode::ibDocumentPostingMode_RealTime;
+	case style::No:  return ibDocumentPostingMode::ibDocumentPostingMode_Regular;
+	}
+	return std::nullopt;
+}
+
+}
+
 void ibValueRecordDataObjectDocument::CallAsAction(const ibActionID &action, ibBackendValueForm* srcForm)
 {
 	switch (action)
 	{
 	case eDefActionAndClose:
-		if (WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_Posting, ibDocumentPostingMode::ibDocumentPostingMode_Regular)) {
-			srcForm->CloseForm();
+		if (const std::optional<ibDocumentPostingMode> mode = AskPostingMode(*this)) {
+			if (WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_Posting, *mode))
+				srcForm->CloseForm();
 		}
 		break;
-	case ePost: WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_Posting, ibDocumentPostingMode::ibDocumentPostingMode_Regular); break;
+	case ePost:
+		if (const std::optional<ibDocumentPostingMode> mode = AskPostingMode(*this))
+			WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_Posting, *mode);
+		break;
 	case eClearPosting: WriteObject(ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting, ibDocumentPostingMode::ibDocumentPostingMode_Regular); break;
 	case eGenerate: Generate(); break;
 	case eCopy: CopyObject(true); break;
@@ -83,8 +121,14 @@ void ibValueMetaObjectDocument::CallAsCommand(ibActionID id, const ibUniqueKey& 
 				const ibDocumentWriteMode wm = (id == ePostValue)
 					? ibDocumentWriteMode::ibDocumentWriteMode_Posting
 					: ibDocumentWriteMode::ibDocumentWriteMode_UndoPosting;
-				doc->WriteObject(wm, ibDocumentPostingMode::ibDocumentPostingMode_Regular);
-				if (srcForm != nullptr) srcForm->UpdateForm();
+				// A posting asks its mode, as the form's does; undoing one has none to ask.
+				const std::optional<ibDocumentPostingMode> mode = (id == ePostValue)
+					? AskPostingMode(*doc)
+					: ibDocumentPostingMode::ibDocumentPostingMode_Regular;
+				if (mode) {
+					doc->WriteObject(wm, *mode);
+					if (srcForm != nullptr) srcForm->UpdateForm();
+				}
 			}
 		}
 		// Catch the BASE, not ibBackendCoreException: a denied right and a lock conflict are

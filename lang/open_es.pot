@@ -6345,6 +6345,13 @@ msgstr ""
 msgid "Clear posting"
 msgstr ""
 
+#: src/engine/backend/metaCollection/partial/documentAction.cpp:55
+#, c-format
+msgid ""
+"Post %s in real time?\n"
+"Yes: the document is dated by the current moment. No: its date stays as it is."
+msgstr ""
+
 #: src/engine/backend/metaCollection/partial/documentEnum.h:49
 msgid "Posting"
 msgstr ""
