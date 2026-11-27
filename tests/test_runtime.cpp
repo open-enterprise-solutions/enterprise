@@ -3284,22 +3284,22 @@ TEST(RuntimeTest, ALiteralArgumentToAParentModuleFunctionKeepsItsValue) {
 TEST(RuntimeTest, AModuleCompiledUnderItsParentsByteCodeReadsItsNames) {
 	ibCompileCode ccParent(wxT("parent"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(ccParent,
-		wxT("var shared public;\n")
+		wxT("var common public;\n")
 		wxT("Function Twice(x) Public\n")
 		wxT("  Return x * 2;\n")
 		wxT("EndFunction\n")
-		wxT("shared = 21;\n")));
+		wxT("common = 21;\n")));
 
 	ibCompileCode ccChild(wxT("child"), wxT("memory"), false);
 	ccChild.SetParent(&ccParent.m_cByteCode);
 	const ibString text =
 		wxT("var fromBody public; var fromFunction public;\n")
 		wxT("Function Read()\n")
-		wxT("  Return shared;\n")
+		wxT("  Return common;\n")
 		wxT("EndFunction\n")
-		wxT("fromBody = Twice(shared);\n")
+		wxT("fromBody = Twice(common);\n")
 		wxT("fromFunction = Read();\n");
-	ASSERT_TRUE(TryCompile(ccChild, wxT("var first public; first = shared;\n")));
+	ASSERT_TRUE(TryCompile(ccChild, wxT("var first public; first = common;\n")));
 	ASSERT_TRUE(TryCompile(ccChild, text));
 	EXPECT_EQ(ccChild.m_cByteCode.m_parent, &ccParent.m_cByteCode);
 

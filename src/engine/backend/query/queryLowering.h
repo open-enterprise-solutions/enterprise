@@ -270,9 +270,9 @@ public:
 	// what this one left and is read under what it locked — the manager alone holds a lock, past the
 	// transaction, until it is closed or gone. Same mechanism, different holder — which is the whole
 	// difference between "a batch" and "a set of tables and locks I am keeping".
-	static std::vector<ibQueryPackageResult> ExecutePackage(const ibQueryPackage& package,
-	                                                 const std::map<ibString, ibValue>& params,
-	                                                 class ibQueryTempDataStore* store = nullptr);
+	BACKEND_API static std::vector<ibQueryPackageResult> ExecutePackage(const ibQueryPackage& package,
+	                                                             const std::map<ibString, ibValue>& params,
+	                                                             class ibQueryTempDataStore* store = nullptr);
 
 	// ⭐⭐ WHERE EACH LINKED SELECTION STANDS IN THE FINAL QUERY — the placement, and the ONE answer
 	// to it. `LINK` declares relations as a SET, in whatever order they were written; what a query
