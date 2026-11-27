@@ -1020,6 +1020,20 @@ ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataMutableRef::Cr
 	return created;
 }
 
+ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataMutableRef::CreateNewObjectValue(const ibValue& reference) const
+{
+	if (reference.GetType() == TYPE_EMPTY)
+		return CreateObjectValue();
+	const ibGuid identity = NewObjectIdentity(reference);
+	const ibValuePtr<ibValueRecordDataObjectRef> created(CreateObjectRefValue());
+	if (created == nullptr)
+		return nullptr;
+	created->TakeIdentity(identity);
+	if (!created->InitializeObject())
+		return nullptr;
+	return created;
+}
+
 ibValuePtr<ibValueRecordDataObjectRef> ibValueMetaObjectRecordDataMutableRef::CopyObjectValue(const ibGuid& srcGuid) const
 {
 	const ibValuePtr<ibValueRecordDataObjectRef> created(CreateObjectRefValue());
@@ -1109,6 +1123,20 @@ ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHiera
 {
 	const ibValuePtr<ibValueRecordDataObjectHierarchyRef> created(CreateObjectRefValue(mode));
 	if (created != nullptr && !created->InitializeObject(objSrc, generate))
+		return nullptr;
+	return created;
+}
+
+ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHierarchyMutableRef::CreateNewObjectValue(ibObjectMode mode, const ibValue& reference) const
+{
+	if (reference.GetType() == TYPE_EMPTY)
+		return CreateObjectValue(mode);
+	const ibGuid identity = NewObjectIdentity(reference);
+	const ibValuePtr<ibValueRecordDataObjectHierarchyRef> created(CreateObjectRefValue(mode));
+	if (created == nullptr)
+		return nullptr;
+	created->TakeIdentity(identity);
+	if (!created->InitializeObject())
 		return nullptr;
 	return created;
 }
@@ -2344,6 +2372,15 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataOb
 
 ibValueRecordDataObjectRef::~ibValueRecordDataObjectRef()
 {
+}
+
+void ibValueRecordDataObjectRef::TakeIdentity(const ibGuid& guid)
+{
+	ibASSERT(m_newObject && guid.isValid());
+	// Both places the key is held: the object's own and the reference SaveData writes the row under.
+	m_objGuid = guid;
+	if (m_reference_impl != nullptr)
+		m_reference_impl->m_guid = guid;
 }
 
 bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)

@@ -1003,6 +1003,16 @@ public:
 	ibValuePtr<ibValueRecordDataObjectRef> CreateObjectValue(const ibGuid& guid) const;
 	ibValuePtr<ibValueRecordDataObjectRef> CreateObjectValue(ibValueRecordDataObjectRef* objSrc, bool generate = false) const;
 
+	// A NEW object that Write() will insert UNDER THE REFERENCE GIVEN - what a load of data that already has an
+	// identity asks for. `reference` is the script's value: empty (not passed) is CreateObjectValue(), a new
+	// object with an identity of its own. Refused, naming this object: a value that is no reference of this
+	// type, an empty reference, a reference an object already stands behind.
+	ibValuePtr<ibValueRecordDataObjectRef> CreateNewObjectValue(const ibValue& reference) const;
+
+	// The identity that reference names for a new object of this type - the refusals above are raised here,
+	// once, for both creators (this one and the hierarchy's).
+	ibGuid NewObjectIdentity(const ibValue& reference) const;
+
 	//copy associate value
 	ibValuePtr<ibValueRecordDataObjectRef> CopyObjectValue(const ibGuid& guid) const;
 
@@ -1492,6 +1502,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectValue(ibObjectMode mode) const;
 	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectValue(ibObjectMode mode, const ibGuid& guid) const;
 	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectValue(ibObjectMode mode, ibValueRecordDataObjectRef* objSrc, bool generate = false) const;
+
+	// The same for an item or a folder: a new one, written under the reference given (see the record base's).
+	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateNewObjectValue(ibObjectMode mode, const ibValue& reference) const;
 
 	//copy associate value
 	ibValuePtr<ibValueRecordDataObjectHierarchyRef> CopyObjectValue(ibObjectMode mode, const ibGuid& guid) const;
@@ -2360,6 +2373,10 @@ public:
 
 	virtual bool InitializeObject(const ibGuid& copyGuid = ibNullGuid);
 	virtual bool InitializeObject(ibValueRecordDataObjectRef* source, bool generate = false);
+
+	// A NEW object takes the identity it will be written under in place of the one minted for it - its
+	// metaobject's word (CreateNewObjectValue), said before the object is initialised.
+	void TakeIdentity(const ibGuid& guid);
 
 	virtual bool WriteObject() = 0;
 	virtual bool DeleteObject() = 0;

@@ -189,6 +189,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Script language
 
+- **A new object is written under a reference given.** Every creator of a reference object takes one optional argument -
+  `CreateItem(ref)`, `CreateFolder(ref)`, `CreateDocument(ref)`, `CreateAccount(ref)`, `CreateCalculationType(ref)` - and
+  `Write()` then stores the new object under that reference; a manager's new `GetRef(id)` gives the reference of its type
+  with an identifier, reading nothing. A load of data that already has an identity, an exchange between two bases or a
+  load run again keeps the identifiers and needs no table from theirs to new ones. The creator refuses, naming the
+  object, a reference that is taken, empty or of another type. Without the argument nothing changes.
 - **A union of plain reads is one statement on the server.** A branch of `UNION` / `UNION ALL` that reads the columns of
   one table as they are goes into the server's statement as a derived table, under its reader's rights - its role's row
   filter inside it, and with `SELECT ALLOWED` a table the user may not read is a branch of no row while the others are

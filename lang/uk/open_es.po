@@ -18849,3 +18849,19 @@ msgstr "ім'я блокування"
 #: src/engine/backend/metaCollection/partial/commonObjectRecordSetQuery.cpp:102
 msgid "LockForUpdate holds the set until the transaction ends, and no transaction is open: begin one before Read"
 msgstr "LockForUpdate утримує набір до кінця транзакції, а транзакцію не відкрито: почніть її перед Read"
+
+
+#: src/engine/backend/metaCollection/partial/commonObjectMetaQuery.cpp:103
+#, c-format
+msgid "'%s': a new object takes a reference of its own type, and '%s' is not one"
+msgstr "'%s': новий об'єкт приймає посилання свого типу, а '%s' ним не є"
+
+#: src/engine/backend/metaCollection/partial/commonObjectMetaQuery.cpp:107
+#, c-format
+msgid "'%s': a new object cannot be created under an empty reference"
+msgstr "'%s': новий об'єкт не можна створити під порожнім посиланням"
+
+#: src/engine/backend/metaCollection/partial/commonObjectMetaQuery.cpp:119
+#, c-format
+msgid "'%s': an object with the reference %s already exists"
+msgstr "'%s': об'єкт із посиланням %s уже існує"
