@@ -159,6 +159,7 @@ add_executable(oes_tests
     test_registerReadRules.cpp
     test_informationRegisterGet.cpp
     test_queryCompositeWalk.cpp
+    test_registerRecordPeriod.cpp
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
     test_totalsKeyHash.cpp
