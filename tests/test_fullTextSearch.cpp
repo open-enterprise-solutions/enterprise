@@ -213,10 +213,13 @@ TEST(FullTextTokenizer, ASizeBetweenDigitsStaysOneWord)
 
 TEST(FullTextTokenizer, CyrillicIsFoldedWhateverTheLocale)
 {
-	const std::vector<ibString> words = ibFullTextTokenizer::Split(ibString(ibT("ЁЖ ШИНА")));
+	// By code point: this file has no byte order mark, and MSVC reads such a source in the machine's
+	// code page, where a Cyrillic letter written as itself is two letters.
+	const std::vector<ibString> words = ibFullTextTokenizer::Split(
+		ibString(ibT("\u0401\u0416 \u0428\u0418\u041D\u0410")));                    // ЁЖ ШИНА
 	ASSERT_EQ(words.size(), 2u);
-	EXPECT_EQ(words[0], ibString(ibT("еж")));   // ё folded to е
-	EXPECT_EQ(words[1], ibString(ibT("шина")));
+	EXPECT_EQ(words[0], ibString(ibT("\u0435\u0436")));                 // еж: ё folded to е
+	EXPECT_EQ(words[1], ibString(ibT("\u0448\u0438\u043D\u0430")));     // шина
 }
 
 TEST(FullTextTokenizer, TheDistanceStopsPastItsLimit)
