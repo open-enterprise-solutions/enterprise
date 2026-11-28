@@ -3461,6 +3461,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 								q.GroupBy(value);
 								projection.push_back(ibQueryProjItem{ value, sqlAlias });
 								projectedAliases.push_back(sqlAlias);
+								compositeSorts[path] = { value };   // a sort by this walk is by the value grouped by (below)
 								continue;
 							}
 						}
@@ -3472,6 +3473,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 									projection.push_back(ibQueryProjItem{ sf.m_expr, sqlAlias + sf.m_suffix });
 								}
 								projectedAliases.push_back(sqlAlias);
+								compositeSorts[path] = chain.CompositeSortFields(path);   // the kinds' order, as unnamed (below)
 								continue;
 							}
 						}
@@ -3526,11 +3528,22 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 			if (a.m_balance != ibBalanceRole::None || a.m_scopeDepth != 0 || a.m_scopeBranch != nullptr)
 				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 					_("a balance or a figure over an area is folded over the detail rows, not by a GROUP BY"));
-			const ibString qual = a.m_path.empty() ? mainQual : joinLeaf(a.m_path);
+			// ⭐ …AND AN INPUT REACHED THROUGH A REFERENCE OF SEVERAL KINDS — MAX(T.Document.Date) — folds the leaf met
+			// across the kinds, the one value a walk projects (CompositeLeaf): a row matches one kind, so exactly one
+			// branch is not null. It was refused, while the same walk grouped by and selected was read (#696).
+			ibQueryExprPtr compositeInput;
+			if (!a.m_path.empty() && !a.m_expr) {
+				ibString resolved; std::shared_ptr<const ibBackendQueryable> target;
+				if (!chain.Resolve(a.m_path, resolved, target) || target == nullptr)
+					compositeInput = chain.CompositeLeaf(a.m_path, /*withTypedEmpty*/ false);
+			}
+			const ibString qual = a.m_path.empty() || compositeInput ? mainQual : joinLeaf(a.m_path);
 			// What is folded is a figure: a composite column gives its number field (FirstSqlFieldOfColumn).
 			std::vector<ibQueryExprPtr> args;
 			if (a.m_expr)                                  // COMPUTED input — SUM(Qty * Price): lower the tree
 				args.push_back(ibMetaIRBuilder::BuildColumnExpr(queryable, a.m_expr, mainQual, ibValueTypes::TYPE_NUMBER));
+			else if (compositeInput)
+				args.push_back(compositeInput);
 			else
 				args.push_back(a.m_col != nullptr ? qualCol(qual, FirstSqlFieldOfColumn(a.m_col, ibValueTypes::TYPE_NUMBER))
 				                                  : ibCol(ibT("*")));

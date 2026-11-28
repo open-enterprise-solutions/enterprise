@@ -604,3 +604,39 @@ TEST_F(QueryCompositeWalk, ASortThatWalksOnFromNoKeyKeepsTheGroups)
 	noKey.OrderBy(docDate, true);
 	EXPECT_TRUE(noKey.GetGroupBy().empty()) << "one total stays one";
 }
+
+// A FIELD REACHED THROUGH A REFERENCE OF SEVERAL KINDS IS GROUPED BY, SORTED BY AND FOLDED as one through a reference of
+// one kind is (#696). The key was grouped by, but a sort by that walk asked the single-kind join and was refused, and so
+// was an aggregate of it - while the same walk selected, or folded over a subquery that selected it, was read.
+TEST_F(QueryCompositeWalk, GroupedByTheDateOfACompositeReferenceUnderAName_SortedByIt)
+{
+	Fill();
+	EXPECT_EQ(kReceiptFirst, Keys(wxT("SELECT T.Doc.Date AS D, MAX(T.Key) AS Key FROM InformationRegister.Payments AS T ")
+		wxT("GROUP BY T.Doc.Date ORDER BY T.Doc.Date")));
+	EXPECT_EQ(kReceiptFirst, Keys(wxT("SELECT T.Doc.Date AS D, MAX(T.Key) AS Key FROM InformationRegister.Payments AS T ")
+		wxT("GROUP BY T.Doc.Date ORDER BY D")));
+}
+
+TEST_F(QueryCompositeWalk, GroupedByTheDateOfACompositeReference_SortedByIt)
+{
+	Fill();
+	EXPECT_EQ(kReceiptFirst, Keys(wxT("SELECT MAX(T.Key) AS Key FROM InformationRegister.Payments AS T ")
+		wxT("GROUP BY T.Doc.Date ORDER BY T.Doc.Date")));
+	EXPECT_EQ((std::vector<ibString>{ wxT("invoice"), wxT("receipt") }), Keys(wxT("SELECT MAX(T.Key) AS Key FROM InformationRegister.Payments AS T ")
+		wxT("GROUP BY T.Doc.Date ORDER BY T.Doc.Date DESC"))) << "the order is the sort's, not the server's";
+}
+
+TEST_F(QueryCompositeWalk, AnAggregateOfTheDateOfACompositeReference_IsItsSubquerysAnswer)
+{
+	Fill();
+	for (const ibString fn : { ibString(wxT("MAX")), ibString(wxT("MIN")) }) {
+		const std::vector<ibString> direct = Keys(wxT("SELECT ") + fn + wxT("(T.Doc.Date) AS Key FROM InformationRegister.Payments AS T"));
+		const std::vector<ibString> nested = Keys(wxT("SELECT ") + fn + wxT("(S.D) AS Key FROM ")
+			wxT("(SELECT T.Doc.Date AS D FROM InformationRegister.Payments AS T) AS S"));
+		ASSERT_EQ(direct.size(), 1u) << fn;
+		EXPECT_FALSE(direct.front().IsEmpty()) << fn;
+		EXPECT_EQ(direct, nested) << fn;
+	}
+	EXPECT_NE(Keys(wxT("SELECT MAX(T.Doc.Date) AS Key FROM InformationRegister.Payments AS T")),
+		Keys(wxT("SELECT MIN(T.Doc.Date) AS Key FROM InformationRegister.Payments AS T"))) << "the two documents' dates differ";
+}
