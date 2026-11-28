@@ -682,6 +682,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `Doc` may hold one of several document types, came back in whatever order the server liked: a sort that walked on
   from a group key was not grouped by, and the statement dropped it without a word. The walk is now a key of the
   statement as well — the groups stay the same, since the key fixes everything it walks into (#410).
+- **A field of a reference of several types is sorted by and aggregated in a grouped query.** With `Doc` holding one
+  of several document types, `GROUP BY T.Doc.Date ORDER BY T.Doc.Date` and `MAX(T.Doc.Date)` were refused with "a
+  dot-walk GROUP BY / aggregate path did not resolve its reference join", while the same field selected, or folded
+  over a subquery that selected it, was read (#696).
 - **A thin designer in an application server gets single-user mode.** The server's own login counted as another
   session, so an apply was refused with "other sessions are connected" when nobody else was. A job
   running at that moment still refuses, and now says so: it ends by itself, and the request can be made again.
