@@ -272,6 +272,12 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 	case enTotal:
 		pvarRetValue = TotalOf(paParams[0]->GetString());
 		return true;
+	case enUnloadColumn:
+		pvarRetValue = UnloadColumn(paParams[0]->GetString());
+		return true;
+	case enFindRows:
+		pvarRetValue = FindRows(*paParams[0]);
+		return true;
 	}
 
 	return false;
@@ -649,6 +655,8 @@ void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) con
 		helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"), enGetMetadata, eTabularSection);
 		helper.AppendFunc(ibT("Index"), 1, ibT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
 		helper.AppendFunc(ibT("Total"), 1, ibT("Total(columnName : string) : number"), enTotal, eTabularSection);
+		helper.AppendFunc(ibT("UnloadColumn"), 1, ibT("UnloadColumn(columnName : string) : array"), enUnloadColumn, eTabularSection);
+		helper.AppendFunc(ibT("FindRows"), 1, ibT("FindRows(filter : structure) : array"), enFindRows, eTabularSection);
 	}
 	else {
 		helper.AppendFunc(ibT("Add"), ibT("Add()"), enAddValue, eTabularSection);
@@ -661,6 +669,8 @@ void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) con
 		helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"), enGetMetadata, eTabularSection);
 		helper.AppendFunc(ibT("Index"), 1, ibT("Index(row : tabularSectionRow) : number"), enIndex, eTabularSection);
 		helper.AppendFunc(ibT("Total"), 1, ibT("Total(columnName : string) : number"), enTotal, eTabularSection);
+		helper.AppendFunc(ibT("UnloadColumn"), 1, ibT("UnloadColumn(columnName : string) : array"), enUnloadColumn, eTabularSection);
+		helper.AppendFunc(ibT("FindRows"), 1, ibT("FindRows(filter : structure) : array"), enFindRows, eTabularSection);
 	}
 }
 

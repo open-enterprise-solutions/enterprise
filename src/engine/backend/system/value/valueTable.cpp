@@ -207,23 +207,9 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	// always a table": a caller that wants plain values says so, instead of the pipeline guessing
 	// from context whether to hand back a row, a reference or a scalar. In row order, so it lines up
 	// with the table it came from.
-	case enUnloadColumn: {
-		ibValueArray* const values = new ibValueArray();
-		pvarRetValue = values;   // the wrapper owns it
-
-		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
-			m_tableColumnCollection != nullptr
-				? m_tableColumnCollection->GetColumnByName(paParams[0]->GetString()) : nullptr;
-		if (colInfo == nullptr)
-			return true;   // no such column: an empty array, not an error — the same answer Find gives
-
-		for (long row = 0; row < GetRowCount(); row++) {
-			ibComposerNode* const node = GetViewData<ibComposerNode>(GetItem(row));
-			if (node != nullptr)
-				values->Add(node->GetTableValue((ibMetaID)colInfo->GetColumnID()));
-		}
+	case enUnloadColumn:
+		pvarRetValue = UnloadColumn(paParams[0]->GetString());
 		return true;
-	}
 
 	case enSort: {
 		// ONE MEANING OF "SORT" for this table: the script's Sort() re-seats the rows, exactly as the two
@@ -240,21 +226,15 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		return true;
 	}
 
-	// ⭐⭐ THE TOTAL OF A COLUMN (the RAM base's TotalOf - a tabular section totals the same way) and THE ROWS THAT
-	// MATCH (FindRows below).
+	// ⭐⭐ THE TOTAL OF A COLUMN and THE ROWS THAT MATCH - the RAM base's TotalOf and FindRows, which a tabular
+	// section and a record set answer the same way.
 	case enTotal:
 		pvarRetValue = TotalOf(paParams[0]->GetString());
 		return true;
 
-	case enFindRows: {
-		// ConvertToValue, not ConvertToType: it CHECKS what the argument is (a string handed in by mistake is
-		// answered with the message below), where the raw cast has no way to say "not one of these".
-		ibValueMap* filter = nullptr;
-		if (paParams[0] == nullptr || !paParams[0]->ConvertToValue(filter))
-			ibBackendCoreException::Error(_("FindRows expects a Structure of column = value"));
-		pvarRetValue = FindRows(*filter);
+	case enFindRows:
+		pvarRetValue = FindRows(*paParams[0]);
 		return true;
-	}
 
 	case enGroupBy:
 		GroupBy(paParams[0]->GetString(), lSizeArray > 1 ? ibString(paParams[1]->GetString()) : ibString());
@@ -749,62 +729,6 @@ void ibValueModelTable::GroupBy(const ibString& groupColumns, const ibString& su
 			node->SetValue(sums[i], ibValue(group.m_sums[i]));
 	}
 	NotifyReset();   // the new rows' cells were written past the model - see FillValues
-}
-
-ibValue ibValueModelTable::FindRows(const ibValueMap& filter)
-{
-	// The filter's columns are resolved FIRST: a name that is not a column is a mistake worth seeing, and
-	// "no rows" would be the wrong way to say it.
-	struct Term { ibMetaID m_id; ibValue m_value; bool m_indexed; };
-	std::vector<Term> terms;
-	for (const auto& entry : filter.Values()) {
-		const ibString name = entry.key.GetString();
-		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
-			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;
-		if (colInfo == nullptr)
-			ibBackendCoreException::Error(_("Table column '%s' not found"), name);
-		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.value, colInfo->IsColumnIndexed() });
-	}
-
-	// Born held (development.md, "A new value is born owned").
-	ibValuePtr<ibValueArray> found(new ibValueArray());
-
-	// A row is taken when EVERY term matches it.
-	const auto take = [&](const ibDataViewItem& item) {
-		ibComposerNode* const node = GetViewData<ibComposerNode>(item);
-		if (node == nullptr)
-			return;
-		for (const Term& term : terms)
-			if (!(term.m_value == node->GetTableValue(term.m_id)))
-				return;
-		ibValue line;
-		line = GetRowAt(item);
-		found->Add(line);
-	};
-
-	// ⭐ THE INDEX ANSWERS FIRST WHEN A TERM'S COLUMN ASKED FOR ONE, as it does for Find (FindRowValue): that
-	// term's rows - already in row order - are the only candidates, and the other terms only thin them. With
-	// no indexed column in the filter every row is a candidate.
-	const Term* byIndex = nullptr;
-	for (const Term& term : terms) {
-		if (term.m_indexed) {
-			byIndex = &term;
-			break;
-		}
-	}
-
-	if (byIndex != nullptr) {
-		const std::vector<ibDataViewItem>* const rows =
-			GetRowsByValue(static_cast<unsigned int>(byIndex->m_id), byIndex->m_value);
-		if (rows != nullptr)
-			for (const ibDataViewItem& item : *rows)
-				take(item);
-	}
-	else {
-		for (long row = 0; row < GetRowCount(); ++row)
-			take(GetItem(row));
-	}
-	return found;
 }
 
 void ibValueModelTable::EditRow(const ibDataViewItem& row)

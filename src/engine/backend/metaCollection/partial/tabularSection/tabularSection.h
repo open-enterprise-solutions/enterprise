@@ -22,6 +22,8 @@ protected:
 		// The position of a row (0-based); -1 for a row of another section.
 		enIndex,
 		enTotal,
+		enUnloadColumn,
+		enFindRows,
 	};
 
 	enum {

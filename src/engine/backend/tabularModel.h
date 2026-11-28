@@ -1867,6 +1867,15 @@ public:
 	// nothing. A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
 	// and so does a cell holding something that is not a number, naming the row. No rows total zero.
 	ibValue TotalOf(const ibString& column) const;
+	// ⭐ THE BARE VALUES OF ONE COLUMN (UnloadColumn(column)), as an array in row order, so it lines up with the
+	// rows it came from. A column that is not there gives an empty array - the answer Find gives for it.
+	ibValue UnloadColumn(const ibString& column) const;
+	// ⭐ THE ROWS THAT MATCH A FILTER (FindRows(filter)), as an array of this model's own rows (change one and the
+	// model changes), in row order. The filter is a Structure of `column = value` - anything else raises, so a
+	// string handed in by mistake is told so; a row matches when EVERY term does, and an empty filter matches every row. A column the filter names that is not there raises rather than
+	// matching nothing: a typo in a filter would otherwise read as "no such rows". A term whose column keeps an
+	// index is answered by it (GetRowsByValue below).
+	ibValue FindRows(const ibValue& filter);
 
 	// (NO GetSourceQueryable override — a RAM model has no queryable; the composer reads m_storage directly.
 	//  The base default returns null.)

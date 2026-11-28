@@ -19,6 +19,9 @@
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
 
+#include "backend/system/value/valueArray.h"   // ibValueArray — what UnloadColumn and FindRows answer
+#include "backend/system/value/valueMap.h"     // ibValueMap — the filter FindRows reads
+#include "backend/value_ptr.h"                 // ibValuePtr — a new array is born held
 #include <deque>   // GetCompositionAttrByRow — the values a condition is handed stay put while it is read
 
 // (ibValueModelRamTreeBase::PopulateFromTree + its MirrorQueryNodes helper were DELETED with the dead
@@ -201,6 +204,87 @@ ibValue ibValueModelStorage::TotalOf(const ibString& column) const
 			column, static_cast<int>(row + 1));
 	}
 	return ibValue(total);
+}
+
+ibValue ibValueModelStorage::UnloadColumn(const ibString& column) const
+{
+	ibValuePtr<ibValueArray> values(new ibValueArray());   // born held (development.md)
+
+	ibValueModelColumnCollection* const columns = GetColumnCollection();
+	const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+		columns != nullptr ? columns->GetColumnByName(column) : nullptr;
+	if (colInfo == nullptr)
+		return values;   // no such column: an empty array, not an error - the same answer Find gives
+
+	const ibMetaID id = static_cast<ibMetaID>(colInfo->GetColumnID());
+	for (long row = 0; row < GetRowCount(); ++row) {
+		ibComposerNode* const node = m_storage.GetNode(row);
+		if (node != nullptr)
+			values->Add(node->GetTableValue(id));
+	}
+	return values;
+}
+
+ibValue ibValueModelStorage::FindRows(const ibValue& argument)
+{
+	// ConvertToValue, not ConvertToType: it CHECKS what the argument is, where the raw cast has no way to say
+	// "not one of these".
+	ibValueMap* filter = nullptr;
+	if (!argument.ConvertToValue(filter))
+		ibBackendCoreException::Error(_("FindRows expects a Structure of column = value"));
+
+	// The filter's columns are resolved FIRST: a name that is not a column is a mistake worth seeing, and
+	// "no rows" would be the wrong way to say it.
+	ibValueModelColumnCollection* const columns = GetColumnCollection();
+	struct Term { ibMetaID m_id; ibValue m_value; bool m_indexed; };
+	std::vector<Term> terms;
+	for (const auto& entry : filter->Values()) {
+		const ibString name = entry.key.GetString();
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+			columns != nullptr ? columns->GetColumnByName(name) : nullptr;
+		if (colInfo == nullptr)
+			ibBackendCoreException::Error(_("Table column '%s' not found"), name);
+		terms.push_back({ static_cast<ibMetaID>(colInfo->GetColumnID()), entry.value, colInfo->IsColumnIndexed() });
+	}
+
+	ibValuePtr<ibValueArray> found(new ibValueArray());   // born held (development.md)
+
+	// A row is taken when EVERY term matches it.
+	const auto take = [&](const ibDataViewItem& item) {
+		ibComposerNode* const node = GetViewData<ibComposerNode>(item);
+		if (node == nullptr)
+			return;
+		for (const Term& term : terms)
+			if (!(term.m_value == node->GetTableValue(term.m_id)))
+				return;
+		ibValue line;
+		line = GetRowAt(item);
+		found->Add(line);
+	};
+
+	// ⭐ THE INDEX ANSWERS FIRST WHEN A TERM'S COLUMN ASKED FOR ONE, as it does for Find: that term's rows -
+	// already in row order - are the only candidates, and the other terms only thin them. With no indexed
+	// column in the filter every row is a candidate.
+	const Term* byIndex = nullptr;
+	for (const Term& term : terms) {
+		if (term.m_indexed) {
+			byIndex = &term;
+			break;
+		}
+	}
+
+	if (byIndex != nullptr) {
+		const std::vector<ibDataViewItem>* const rows =
+			GetRowsByValue(static_cast<unsigned int>(byIndex->m_id), byIndex->m_value);
+		if (rows != nullptr)
+			for (const ibDataViewItem& item : *rows)
+				take(item);
+	}
+	else {
+		for (long row = 0; row < GetRowCount(); ++row)
+			take(GetItem(row));
+	}
+	return found;
 }
 
 bool ibValueModelStorage::SortRows(const ibDataViewColumnItem& column, bool ascending)
