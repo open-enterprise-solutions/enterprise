@@ -2903,9 +2903,12 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModuleDataObject<ibValu
 	// values — and reads the set on its own side.
 	virtual bool IsTransferable() const override { return false; }
 
-	// The set's own properties (FillRecordSetProperties) — every other name is the module's.
+	// The set's own members (FillRecordSetMembers) — every other name is the module's.
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+	// The verbs every register's set answers alike — Total, UnloadColumn, FindRows, the RAM base's work. A
+	// register's leaf answers its own first and hands the rest down here.
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_recordColumnCollection; }
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
@@ -3078,9 +3081,11 @@ public:
 
 	void CreateEmptyKey();
 	bool InitializeObject(const ibValueRecordSetObject* source = nullptr, bool newRecord = false);
-	// The set's own properties, a level of their own under the module's names and above a register's verbs:
-	// LockForUpdate. (Filter is the module's — an export variable, InitializeObject.)
-	void FillRecordSetProperties(ibMemberTable& helper) const;
+	// The set's own members, a level of their own under the module's names and above a register's verbs:
+	// LockForUpdate, and the row verbs every register answers alike (Total, UnloadColumn, FindRows - the RAM
+	// base's, as a value table and a tabular section answer them). (Filter is the module's — an export
+	// variable, InitializeObject.)
+	void FillRecordSetMembers(ibMemberTable& helper) const;
 
 	bool FindKeyValue(const ibMetaID& id) const { return m_keyValues.find(id) != m_keyValues.end(); }
 	template <typename value>

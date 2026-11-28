@@ -196,6 +196,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **What follows `new Class(…)` is read on.** `new Array(3).Count()`, `New Query(text).Execute().Select()`
   and `New Structure("A", 1).A` compile, as a statement too. They were refused with "Keyword or
   identifier expected".
+- **A tabular section and a register's record set answer `Total`, `UnloadColumn` and `FindRows`** as a value table
+  does: `Goods.FindRows(New Structure("Item", Item))` returns the section's own rows, `RecordSet.Total("Amount")` adds
+  a column of the movements. A record set answered none of the three and a tabular section only `Total`; asking meant
+  copying the rows into a value table with `Unload` first.
 - **`StrSplit(string, separators, includeBlank = true)`** cuts a string into an Array of its parts. Each
   character of `separators` is a separator; with `includeBlank` false the empty parts are left out.
 - **`FillPropertyValues(receiver, source, list, exclude)`** fills the receiver's properties with the source's of the

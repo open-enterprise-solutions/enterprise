@@ -3857,7 +3857,7 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 	// ibValueTabularSectionDataObjectBase).
 	Storage().SetColumns(m_recordColumnCollection);
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
-	m_members.Bind(this, &ibValueRecordSetObject::FillRecordSetProperties);
+	m_members.Bind(this, &ibValueRecordSetObject::FillRecordSetMembers);
 }
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModuleDataObject(source.GetMetaForCompile()),
@@ -3867,7 +3867,7 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 {
 	Storage().SetColumns(m_recordColumnCollection);   // as above
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
-	m_members.Bind(this, &ibValueRecordSetObject::FillRecordSetProperties);
+	m_members.Bind(this, &ibValueRecordSetObject::FillRecordSetMembers);
 	for (long row = 0; row < source.GetRowCount(); row++) {
 		ibComposerNode* node = source.GetViewData<ibComposerNode>(source.GetItem(row));
 		ibASSERT(node);
@@ -3886,14 +3886,43 @@ enum prop
 	ePropLockForUpdate = 0,
 };
 
-void ibValueRecordSetObject::FillRecordSetProperties(ibMemberTable& helper) const
+// A method's data is its place on its binder's level, counted from 0 — this order IS FillRecordSetMembers' order.
+enum recordSetFunc
+{
+	eFuncTotal = 0,
+	eFuncUnloadColumn,
+	eFuncFindRows,
+};
+
+void ibValueRecordSetObject::FillRecordSetMembers(ibMemberTable& helper) const
 {
 	helper.AppendProp(ibT("LockForUpdate"), ePropLockForUpdate);
+
+	helper.AppendFunc(ibT("Total"), 1, ibT("Total(columnName : string) : number"));
+	helper.AppendFunc(ibT("UnloadColumn"), 1, ibT("UnloadColumn(columnName : string) : array"));
+	helper.AppendFunc(ibT("FindRows"), 1, ibT("FindRows(filter : structure) : array"));
+}
+
+bool ibValueRecordSetObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordSetObject::FillRecordSetMembers))
+	{
+	case eFuncTotal:
+		pvarRetValue = TotalOf(paParams[0]->GetString());
+		return true;
+	case eFuncUnloadColumn:
+		pvarRetValue = UnloadColumn(paParams[0]->GetString());
+		return true;
+	case eFuncFindRows:
+		pvarRetValue = FindRows(*paParams[0]);
+		return true;
+	}
+	return ibValueModuleDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 bool ibValueRecordSetObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (m_members.GetPropData(lPropNum, this, &ibValueRecordSetObject::FillRecordSetProperties) == ePropLockForUpdate) {
+	if (m_members.GetPropData(lPropNum, this, &ibValueRecordSetObject::FillRecordSetMembers) == ePropLockForUpdate) {
 		m_lockForUpdate = varPropVal.GetBoolean();
 		return true;
 	}
@@ -3902,7 +3931,7 @@ bool ibValueRecordSetObject::SetPropVal(const long lPropNum, const ibValue& varP
 
 bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	if (m_members.GetPropData(lPropNum, this, &ibValueRecordSetObject::FillRecordSetProperties) == ePropLockForUpdate) {
+	if (m_members.GetPropData(lPropNum, this, &ibValueRecordSetObject::FillRecordSetMembers) == ePropLockForUpdate) {
 		pvarPropVal = m_lockForUpdate;
 		return true;
 	}
